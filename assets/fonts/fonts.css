@@ -1,0 +1,24 @@
+/* ============================================================================
+   自托管字体（忠实复刻参考站的真实 @font-face 声明）
+   来源：melius.com /_next/static/immutable/media/*.woff2（已本地化到本目录）
+   - recklessStandard           衬线展示体（对应 --t-h-1 大标题）
+   - futurist                  几何无衬线（对应 --font-fg-futurist）
+   - easeStandard              正文/UI 无衬线（对应 --font-ease-standard）
+   - Geist Mono                等宽（latin 子集）
+   附带的 *Fallback 是按原站 metrics 覆写的 Arial 兜底，用于消除字体加载抖动；
+   数值逐字照抄原站，不要手改。
+   注意：Reckless Standard 为商业授权字体，仅本地学习/复刻使用；
+          对外发布前请替换为自有授权字体（见 NOTES.md「部署前须替换清单」）。
+   ========================================================================== */
+
+@font-face{font-family:easeStandard;src:url(ease_standard_regular.woff2)format("woff2");font-display:swap;font-weight:400;font-style:normal}
+@font-face{font-family:easeStandard Fallback;src:local(Arial);ascent-override:87.75%;descent-override:18.92%;line-gap-override:10.48%;size-adjust:107.12%}
+
+@font-face{font-family:recklessStandard;src:url(reckless_standard_regular.woff2)format("woff2");font-display:swap;font-weight:400;font-style:normal}
+@font-face{font-family:recklessStandard Fallback;src:local(Arial);ascent-override:93.28%;descent-override:22.4%;line-gap-override:0.0%;size-adjust:94.66%}
+
+@font-face{font-family:futurist;src:url(fg_futurist_regular.woff2)format("woff2");font-display:swap;font-weight:400;font-style:normal}
+@font-face{font-family:futurist Fallback;src:local(Arial);ascent-override:85.21%;descent-override:22.08%;line-gap-override:0.0%;size-adjust:115.0%}
+
+@font-face{font-family:Geist Mono;font-style:normal;font-weight:100 900;font-display:swap;src:url(geist_mono.woff2)format("woff2")}
+@font-face{font-family:Geist Mono Fallback;src:local(Arial);ascent-override:74.67%;descent-override:21.92%;line-gap-override:0.0%;size-adjust:134.59%}
