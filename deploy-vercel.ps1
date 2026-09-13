@@ -1,77 +1,71 @@
 ﻿# ============================================================================
-#  作品集网站 · 推送到 GitHub（供 Vercel 部署）
+#  一键更新作品集 -> GitHub -> Vercel
 #  ---------------------------------------------------------------------------
-#  目标仓库：https://github.com/Yeeyech/yee-portfolio.git
-#  用法：右键本文件 →「使用 PowerShell 运行」，或在终端执行：
-#      powershell -ExecutionPolicy Bypass -File .\deploy-vercel.ps1
+#  用法：右键本文件 ->「使用 PowerShell 运行」
 #
-#  本脚本只负责「把代码推上 GitHub」这一段。
-#  推送完成后到 Vercel 导入该仓库即可生成分享链接。
+#  【站点入口】index.html = 嵌入版.html 的内容（终稿）。
+#     嵌入版.html 是唯一需要维护的源文件，本脚本第 1 步会把它同步到
+#     index.html，保证线上根路径呈现的就是终稿效果。
+#     旧版纯滚动首页备份为 index-basic.html，不再参与发布。
+#
+#  【为什么不用 git push】
+#     本机 github.com:443 直连超时、走代理被 502 拦截，git push 无法工作；
+#     但 api.github.com 可直连。因此改用 GitHub REST API 写入仓库内容。
+#
+#  【前置】gh CLI 已登录（gh auth status）
 # ============================================================================
 
 $ErrorActionPreference = 'Stop'
 
-$GH     = "C:\Program Files\GitHub CLI\gh.exe"
-$REPO   = "Yeeyech/yee-portfolio"
+$SITE   = "C:\Users\17979\Desktop\portfolio-site"
+$OWNER  = "Yeeyech"
+$REPO   = "yee-portfolio"
 $BRANCH = "main"
+$SRC    = Join-Path $SITE "嵌入版.html"
+$INDEX  = Join-Path $SITE "index.html"
+$PUSH   = "C:\Users\17979\.workbuddy\skills\github-push-via-api\scripts\push-via-api.ps1"
+$GH     = "C:\Program Files\GitHub CLI\gh.exe"
 
-Set-Location -Path $PSScriptRoot
+Set-Location $SITE
 
-# 清掉可能拦截 git 的代理环境变量（本机曾出现 502 CONNECT tunnel failed）
-Remove-Item Env:HTTP_PROXY  -ErrorAction SilentlyContinue
-Remove-Item Env:HTTPS_PROXY -ErrorAction SilentlyContinue
-
-Write-Host "`n=== 1/5 检查网络 ===" -ForegroundColor Cyan
-foreach ($u in @("https://github.com", "https://api.github.com")) {
-  try {
-    $r = Invoke-WebRequest -Uri $u -Method Head -TimeoutSec 15 -UseBasicParsing
-    Write-Host ("  OK   {0}   HTTP {1}" -f $u, $r.StatusCode) -ForegroundColor Green
-  } catch {
-    Write-Host ("  X    {0}   不可达" -f $u) -ForegroundColor Red
-    Write-Host "       请先开启代理/VPN 再重跑本脚本。" -ForegroundColor Yellow
-    exit 1
+Write-Host "`n=== 1/4 同步站点入口（嵌入版.html -> index.html）===" -ForegroundColor Cyan
+if (Test-Path -LiteralPath $SRC) {
+  $h1 = (Get-FileHash -LiteralPath $SRC   -Algorithm SHA256).Hash
+  $h2 = ""
+  if (Test-Path -LiteralPath $INDEX) { $h2 = (Get-FileHash -LiteralPath $INDEX -Algorithm SHA256).Hash }
+  if ($h1 -ne $h2) {
+    Copy-Item -LiteralPath $SRC -Destination $INDEX -Force
+    Write-Host "  已同步：index.html 更新为终稿内容" -ForegroundColor Green
+  } else {
+    Write-Host "  index.html 已是最新终稿，无需同步" -ForegroundColor Green
   }
+} else {
+  Write-Host "  未找到 嵌入版.html，跳过同步（将直接发布现有 index.html）" -ForegroundColor Yellow
 }
 
-Write-Host "`n=== 2/5 检查 GitHub 登录 ===" -ForegroundColor Cyan
-& $GH auth status *> $null
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "  未登录，启动浏览器授权（按提示在网页里输入一次性验证码）..." -ForegroundColor Yellow
-  & $GH auth login --hostname github.com --git-protocol https --web
-  if ($LASTEXITCODE -ne 0) { Write-Host "  X 登录失败" -ForegroundColor Red; exit 1 }
-}
-& $GH auth status
-
-Write-Host "`n=== 3/5 提交本地改动 ===" -ForegroundColor Cyan
-$email = (git config user.email)
-if ($email -eq "yee@example.com" -or -not $email) {
-  Write-Host "  ! 提交邮箱仍是占位符：$email" -ForegroundColor Yellow
-  Write-Host "    GitHub 不会把提交关联到你的账号，建议先执行：" -ForegroundColor Yellow
-  Write-Host "    git config user.email \"你的GitHub邮箱\"" -ForegroundColor Yellow
-}
+Write-Host "`n=== 2/4 提交本地改动 ===" -ForegroundColor Cyan
 git add -A
 git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
-  git commit -q -m "更新作品集内容"
-  Write-Host "  已提交新改动" -ForegroundColor Green
+  $stamp = Get-Date -Format "yyyy-MM-dd HH:mm"
+  git commit -q -m "Update site content ($stamp)"
+  Write-Host "  已提交本地改动" -ForegroundColor Green
 } else {
-  Write-Host "  工作区干净，无需提交" -ForegroundColor Green
+  Write-Host "  工作区干净，无新改动" -ForegroundColor Green
 }
 
-Write-Host "`n=== 4/5 关联远程仓库 ===" -ForegroundColor Cyan
-git remote remove origin 2>$null
-git remote add origin "https://github.com/$REPO.git"
-git remote -v
+Write-Host "`n=== 3/4 推送到 GitHub（走 REST API）===" -ForegroundColor Cyan
+& $GH auth status 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { Write-Host "  未登录 GitHub，请先执行 gh auth login" -ForegroundColor Red; exit 1 }
 
-Write-Host "`n=== 5/5 推送到 GitHub ===" -ForegroundColor Cyan
-Write-Host "  仓库约 87 MB，首次推送视网速需要 1-5 分钟，请勿中断..." -ForegroundColor DarkGray
-git push -u origin $BRANCH
-if ($LASTEXITCODE -ne 0) { Write-Host "  X 推送失败，把上面的报错发我" -ForegroundColor Red; exit 1 }
+& $PUSH -Site $SITE -Owner $OWNER -Repo $REPO -Branch $BRANCH `
+        -CommitMessage "Update site content" `
+        -LogFile "$SITE\.push.log"
 
-Write-Host "`n============================================" -ForegroundColor Green
-Write-Host " 代码已推送：https://github.com/$REPO" -ForegroundColor Green
-Write-Host " 下一步：在 Vercel 导入这个仓库即可上线" -ForegroundColor Green
-Write-Host "============================================`n" -ForegroundColor Green
+if ($LASTEXITCODE -ne 0) { Write-Host "`n  推送失败，请查看上面的日志" -ForegroundColor Red; exit 1 }
+Write-Host "  已推送到 https://github.com/$OWNER/$REPO" -ForegroundColor Green
 
-Start-Process "https://vercel.com/new"
+Write-Host "`n=== 4/4 Vercel ===" -ForegroundColor Cyan
+Write-Host "  仓库已更新；Vercel 检测到新提交后会自动重新部署。" -ForegroundColor Green
+Start-Process "https://vercel.com/dashboard"
 

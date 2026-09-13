@@ -298,47 +298,6 @@ body.past-home #page-yiwen .skip-link {
   letter-spacing: 0.08em; color: var(--muted); pointer-events: none;}
 #page-yiwen .about-portrait.has-lanyard .about-portrait-hint{display: block;}
 </style>
-<style>
-
-/* ── 3D 画廊浮层（iframe 嵌入 3D画廊.html 这个链接）── */
-.gal-overlay { position: fixed; inset: 0; z-index: 999999; }
-.gal-overlay[hidden] { display: none; }
-.gal-overlay__backdrop {
-  position: absolute; inset: 0;
-  background: rgba(5, 8, 14, .86);
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
-  cursor: pointer;
-}
-.gal-overlay__frame {
-  position: absolute; inset: clamp(12px, 2.6vh, 30px) clamp(12px, 2.6vw, 30px);
-  display: flex; flex-direction: column;
-  background: #0e0e0e; border-radius: 16px; overflow: hidden;
-  box-shadow: 0 40px 90px -30px rgba(0,0,0,.85);
-  animation: galOverlayIn .32s cubic-bezier(.2, 0, 0, 1);
-}
-@keyframes galOverlayIn { from { opacity: 0; transform: scale(.985) translateY(10px); } to { opacity: 1; transform: none; } }
-.gal-overlay__bar {
-  flex: none; z-index: 2;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 11px 14px; background: #0e0e0e; border-bottom: 1px solid rgba(255,255,255,.08);
-}
-.gal-overlay__tag {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: #9c9996;
-}
-.gal-overlay__close {
-  width: 34px; height: 34px; flex: none;
-  border: 0; border-radius: 50%; background: rgba(255,255,255,.1); color: #fafafa;
-  font-size: 20px; line-height: 1; cursor: pointer;
-  transition: background .2s, transform .2s;
-}
-.gal-overlay__close:hover { background: #f04e23; transform: rotate(90deg); }
-.gal-overlay__close:focus-visible { outline: 2px solid #f04e23; outline-offset: 2px; }
-.gal-overlay__iframe { flex: 1 1 auto; width: 100%; border: 0; background: #e3e3e3; }
-html.gal-overlay-open { overflow: hidden; }
-@media (max-width: 720px) { .gal-overlay__frame { inset: 0; border-radius: 0; } }
-
-</style>
 </head>
 <body>
 
@@ -2864,91 +2823,6 @@ if (!document.getElementById('lanyard-mount')) {
   window.addEventListener('scroll', sync, { passive: true });
   window.addEventListener('resize', sync);
   sync();
-})();
-
-</script>
-
-<!-- ===== 3D 画廊 · 浮层嵌入：点击作品卡打开，iframe 加载 3D画廊.html ===== -->
-<div class="gal-overlay" id="galOverlay" hidden aria-hidden="true">
-  <button class="gal-overlay__backdrop" type="button" tabindex="-1" aria-label="关闭画廊"></button>
-  <div class="gal-overlay__frame" role="dialog" aria-modal="true" aria-label="3D 作品画廊">
-    <div class="gal-overlay__bar">
-      <span class="gal-overlay__tag">Gallery · 3D 影像环</span>
-      <button class="gal-overlay__close" type="button" aria-label="关闭">&times;</button>
-    </div>
-    <iframe class="gal-overlay__iframe" id="galFrame" title="3D 作品画廊" src="about:blank" allow="fullscreen"></iframe>
-  </div>
-</div>
-
-<script>
-
-/* ============================================================================
-   浮层嵌入（嵌入版）：点作品卡 → 在浮层里用 iframe 打开那张卡指向的独立页面。
-   被嵌入的页面本身还是独立文件，没有被复制进本页 —— 只是通过点击把它的链接引出来。
-   目前登记了两个可嵌入页：3D 画廊、毕业设计。
-   ========================================================================== */
-(function () {
-  'use strict';
-  var overlay = document.getElementById('galOverlay');
-  var frame = document.getElementById('galFrame');
-  var tag = document.querySelector('.gal-overlay__tag');
-
-  /* 可嵌入浮层的页面：文件名 → 顶栏标题 */
-  var EMBEDS = [
-    { file: '3D画廊.html', label: 'Gallery · 3D 影像环' },
-    { file: '毕业设计.html', label: 'Graduation Project · 毕业设计' },
-    { file: 'ai-image-workflow.html', label: 'Digital Graphic Design · AI 图像创作流程' }
-  ];
-  var currentSrc = '';
-
-  function findEmbed (href) {
-    if (!href) return null;
-    for (var i = 0; i < EMBEDS.length; i++) {
-      if (href.indexOf(EMBEDS[i].file) !== -1) return EMBEDS[i];
-    }
-    return null;
-  }
-
-  function open (href) {
-    var hit = findEmbed(href) || EMBEDS[0];
-    var src = href || hit.file;             /* 用完整 href：保留 #片段，页面靠它定位到指定步骤 */
-    if (currentSrc !== src) {               /* 只有换了目标才重新加载 iframe */
-      frame.setAttribute('src', src);
-      frame.setAttribute('title', hit.label);
-      currentSrc = src;
-    }
-    if (tag) tag.textContent = hit.label;
-    overlay.hidden = false;
-    overlay.setAttribute('aria-hidden', 'false');
-    document.documentElement.classList.add('gal-overlay-open');
-    var close = document.querySelector('.gal-overlay__close');
-    if (close) close.focus();
-  }
-  function close () {
-    overlay.hidden = true;
-    overlay.setAttribute('aria-hidden', 'true');
-    document.documentElement.classList.remove('gal-overlay-open');
-  }
-  window.__galleryOverlay = { open: open, close: close, embeds: EMBEDS };
-
-  document.querySelector('.gal-overlay__close').addEventListener('click', close);
-  document.querySelector('.gal-overlay__backdrop').addEventListener('click', close);
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && !overlay.hidden) close();
-  });
-
-  // 拦截指向「已登记可嵌入页」的链接（作品卡），改为在浮层里打开。
-  // 普通左键（无修饰键）才拦截；Ctrl/Cmd+点击、中键等仍走原生（新标签打开）。
-  document.addEventListener('click', function (e) {
-    if (e.defaultPrevented) return;
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-    var a = e.target && e.target.closest ? e.target.closest('a') : null;
-    if (!a) return;
-    var href = a.getAttribute('href');
-    if (!findEmbed(href)) return;
-    e.preventDefault();
-    open(href);
-  });
 })();
 
 </script>
