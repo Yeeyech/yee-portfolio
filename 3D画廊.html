@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ↓ 这两处是页面之外的文案（浏览器标签页 / 搜索结果），页面上看不见；
+     其余所有页面上能看到的文字都在下方脚本顶部的 CONFIG 里 -->
+<title>3D 影像环 · 首屏交互模板（复刻 melius.com）</title>
+<meta name="description" content="复刻 melius.com 首屏的 3D 影像环交互模板：影像从中心持续向两侧飞出、画布逐块抖动的标题、打字机提示词输入框。">
+
+<!-- 自托管真字体（Reckless / FG Futurist / Ease Standard，逐字照抄原站 @font-face） -->
+<link rel="stylesheet" href="assets/fonts/fonts.css">
+
+<style>
+/* ============================================================================
+   设计 token —— 数值全部取自参考站编译后的 CSS（SOURCE，非目测）
+   ========================================================================== */
+:root{
+  /* 色板：原站 --color-* 逐字照抄 */
+  --color-white:#fafafa;
+  --color-black:#0e0e0e;
+  --color-offblack:#1a1616;
+  --color-gray:#676767;
+  --color-gray-light-1:#9c9996;
+  --color-gray-light-2:#b9b9b9;
+  --color-gray-light-2-faded:#b9b9b966;
+  --color-gray-light-3:#d9d9d9;
+  --color-gray-dark-1:#202020;
+  --color-gray-background:#e3e3e3;
+  --color-gray-background-2:#e5e3e3;
+  --color-orange:#f04e23;
+
+  /* 字体栈：原站 --font-* 逐字照抄（含 metrics 兜底体） */
+  --font-reckless-standard:recklessStandard,"recklessStandard Fallback",Georgia,serif;
+  --font-fg-futurist:futurist,"futurist Fallback",Arial,"Helvetica Neue",sans-serif;
+  --font-ease-standard:easeStandard,"easeStandard Fallback",Arial,"Helvetica Neue",sans-serif;
+  --font-mono:"Geist Mono","Geist Mono Fallback",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --font-sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+
+  /* 字号 token：原站 --t-* 逐字照抄 */
+  --t-h-1:400 3.5rem/1 var(--font-reckless-standard);        /* 56px/1 衬线大标题 */
+  --t-b-2:400 .85rem/1.2 var(--font-ease-standard);
+  --t-b-3:400 .8rem/1.2 var(--font-ease-standard);           /* 12.8px/15.36px */
+
+  /* 缓动：原站 --ease-* 与 GSAP 同名曲线 */
+  --ease-out:cubic-bezier(0,0,.2,1);
+  --ease-quart-in-out:cubic-bezier(.76,0,.24,1);   /* = GSAP power3.inOut */
+  --ease-sin-in-out:cubic-bezier(.37,0,.63,1);
+  --ease-out-expo:cubic-bezier(.16,1,.3,1);
+  --ease-out-quart:cubic-bezier(.25,1,.5,1);       /* = GSAP power3.out */
+  --ease-out-quint:cubic-bezier(.22,1,.36,1);      /* = GSAP power4.out */
+
+  --spacing:.25rem;
+
+  /* 影像环：由 JS 在 resize 时写入 */
+  --pw:520px;          /* 画面基准宽（已折算 ring.groupTo） */
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html{
+  font-size:16px;                       /* 原站 html{font-size:16px} */
+  background-color:var(--color-gray-background);
+  color:var(--color-black);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  overscroll-behavior:none;
+}
+body{ margin:0; min-height:100svh; overflow:hidden; font-family:var(--font-sans); }
+.sr-only{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+
+/* ============================================================================
+   背景：15px 点阵（2px 圆点 / 8% 黑）—— 原站 data-URI 逐字节照抄
+   ========================================================================== */
+.bg{
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-color:var(--color-gray-background);
+  background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20width%3D'15'%20height%3D'15'%3E%3Crect%20x%3D'6.5'%20y%3D'6.5'%20width%3D'2'%20height%3D'2'%20rx%3D'1'%20ry%3D'1'%20fill%3D'rgb(0%2C0%2C0)'%20fill-opacity%3D'0.08'%2F%3E%3C%2Fsvg%3E");
+  background-size:15px 15px;
+  background-repeat:repeat;
+  background-position:0 0;
+}
+
+/* ============================================================================
+   首屏骨架
+   ========================================================================== */
+.hero{ position:relative; min-height:100svh; overflow:hidden; }
+
+/* 影像环所在层（原站：absolute inset-0 flex items-center justify-center overflow-hidden） */
+.stage{
+  position:absolute; inset:0; z-index:0;
+  display:flex; align-items:center; justify-content:center;
+  overflow:hidden; pointer-events:none;
+}
+
+/* 巨型字标层（原站 absolute z-10 w-[120vw]，GSAP scale 0 → .45 / 3s power3.out）
+   —— 原站该层被其 WebGL 画布完全遮住，这里按模板需要保留为极淡的一层 */
+.wordmark{
+  position:absolute; z-index:1; width:120vw; display:flex; align-items:center; justify-content:center;
+  transform:scale(0);
+  will-change:transform;
+}
+.wordmark svg{ width:100%; height:auto; display:block; }
+.wordmark text{
+  font-family:var(--font-reckless-standard);
+  font-size:100px; letter-spacing:-.02em; fill:#202020; opacity:.055;
+}
+
+/* ---- 影像环本体 ---------------------------------------------------------- */
+.ring{ position:absolute; inset:0; }
+
+/* 单幅画面：尺寸写死为「基准宽」，逐帧只改 transform（不触发布局） */
+.card{
+  position:absolute; left:50%; top:50%;
+  width:var(--pw); aspect-ratio:var(--ar,1);
+  transform-origin:50% 50%;
+  will-change:transform,opacity;
+  backface-visibility:hidden;
+  pointer-events:none;
+  visibility:hidden;
+}
+.card__btn{
+  display:block; width:100%; height:100%; padding:0; border:0; background:#fff;
+  border-radius:var(--radius,4%);          /* 原站 SDF 圆角半径 0.04 */
+  overflow:hidden; cursor:pointer;
+  box-shadow:0 1px 2px rgba(14,14,14,.06), 0 18px 40px -22px rgba(14,14,14,.5);
+  transition:box-shadow 260ms var(--ease-out);
+  position:relative;                       /* 让标签条贴在这一层上 */
+}
+.card__img{
+  display:block; width:100%; height:100%; object-fit:cover;
+  transition:transform 620ms var(--ease-out-quart), filter 620ms var(--ease-out);
+}
+/* 悬停反馈必须放在内层元素上：外层 .card 的 transform 每帧被 JS 覆写 */
+.card.is-live .card__btn{ pointer-events:auto; }
+.card.is-live .card__btn:hover{ box-shadow:0 2px 10px rgba(14,14,14,.12), 0 30px 60px -24px rgba(14,14,14,.6); }
+.card.is-live .card__btn:hover .card__img{ transform:scale(1.06); filter:saturate(1.06); }
+.card__btn:focus-visible{ outline:2px solid var(--color-orange); outline-offset:3px; }
+
+/* 悬停浮现的标题条 */
+.card__tag{
+  position:absolute; left:0; right:0; bottom:0; z-index:2;
+  display:flex; align-items:center; justify-content:space-between; gap:6px;
+  padding:6px 8px; background:rgba(14,14,14,.82); color:var(--color-white);
+  font:400 10px/1.2 var(--font-ease-standard); letter-spacing:-.02em;
+  opacity:0; transform:translateY(6px);
+  transition:opacity 240ms var(--ease-out), transform 240ms var(--ease-out);
+  pointer-events:none;
+}
+.card.is-live .card__btn:hover .card__tag,
+.card.is-live .card__btn:focus-visible .card__tag{ opacity:1; transform:none; }
+
+/* ============================================================================
+   首屏文案（原站 min-h-main relative flex flex-col items-center justify-center
+   overflow-hidden px-5 py-20 lg:px-8）
+   ========================================================================== */
+.hero__inner{
+  position:relative; z-index:2;
+  min-height:100svh; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; overflow:hidden;
+  padding:5rem 1.25rem;
+  /* 这一层盖在影像环之上；必须放行指针事件，否则画面点不到、也悬停不了 */
+  pointer-events:none;
+}
+/* 只有真正需要交互的元素重新打开指针事件 */
+.prompt-slot{ pointer-events:auto; }
+@media (min-width:1024px){ .hero__inner{ padding-left:2rem; padding-right:2rem; } }
+
+/* ---- 大标题：canvas 逐块抖动（原站 t-h-1 relative top-4 lg:top-8） ------- */
+.title{
+  position:relative; top:1rem;
+  display:flex; flex-direction:column; text-align:center;
+  font:var(--t-h-1); letter-spacing:-.02em; color:var(--color-black);
+  margin:0;
+  opacity:0; transform:scale(1.2);
+}
+@media (min-width:1024px){ .title{ top:2rem; } }
+/* 量体用的隐形层：决定 h1 的宽高（原站同款做法） */
+.title__sizer{ visibility:hidden; display:block; text-align:center; }
+.title__canvas{ position:absolute; pointer-events:none; }
+.title.is-in{ animation:titleIn 1.5s var(--ease-out-expo) forwards; }
+@keyframes titleIn{ from{ opacity:0; transform:scale(1.2); } to{ opacity:1; transform:none; } }
+
+/* ---- 文案块 + 提示词胶囊（原站 mt-68 lg:mt-100 gap-9） ------------------- */
+.below{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2.25rem; margin-top:17rem;
+  opacity:0; transform:scale(1.2);
+}
+@media (min-width:1024px){ .below{ margin-top:25rem; } }
+.below.is-in{ animation:belowIn 1.5s .2s var(--ease-out-expo) forwards; }
+@keyframes belowIn{ from{ opacity:0; transform:scale(1.2); } to{ opacity:1; transform:none; } }
+
+.copy{
+  max-width:20rem; text-align:center; text-wrap:balance;
+  font:400 1rem/1.5 var(--font-sans); color:var(--color-black);
+  margin:0;
+}
+@media (min-width:1024px){ .copy{ max-width:30rem; } }
+
+/* 提示词位（原站 t-b-3 min-h-[calc(2lh+1.5rem)] lg:max-w-80） */
+.prompt-slot{
+  font:var(--t-b-3);
+  min-height:calc(2lh + 1.5rem);
+  width:100%; max-width:100%;
+  display:flex; align-items:center; justify-content:center;
+}
+@media (min-width:1024px){ .prompt-slot{ max-width:20rem; } }
+
+/* ============================================================================
+   提示词胶囊（原站：bg-gray-dark-1 / border-gray-light-2-faded /
+   rounded-16 / h-55 / px-15 / gap-8 / 32px 圆形按钮）
+   ========================================================================== */
+.prompt{
+  position:relative; width:100%; border-radius:16px;
+  background-color:var(--color-gray-dark-1);
+  border:1px solid var(--color-gray-light-2-faded);
+  box-shadow:0 12px 64px 0 rgba(0,0,0,.12);
+  overflow:hidden;
+}
+/* 橙色流光描边（原站 dock 内的 120deg 渐变环，默认 opacity:0） */
+.prompt__glow{
+  position:absolute; inset:-1px; border-radius:inherit; padding:1px; opacity:0;
+  background-image:linear-gradient(120deg,transparent 35%,var(--color-orange) 50%,transparent 65%);
+  background-size:300% 300%;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box exclude,linear-gradient(#fff 0 0);
+          mask:linear-gradient(#fff 0 0) content-box exclude,linear-gradient(#fff 0 0);
+  pointer-events:none; transition:opacity 240ms var(--ease-out);
+}
+.prompt.is-active .prompt__glow{ opacity:1; animation:glowSweep 2.2s linear infinite; }
+@keyframes glowSweep{ from{ background-position:0% 50%; } to{ background-position:300% 50%; } }
+
+.prompt__row{
+  position:relative; display:flex; align-items:center; gap:.5rem;
+  height:55px; padding:0 15px;
+}
+.prompt__icon{ flex:none; display:inline-flex; width:32px; height:12px; color:var(--color-gray-light-2); }
+.prompt__icon svg{ width:100%; height:100%; display:block; }
+
+.prompt__field{ position:relative; min-width:0; flex:1 1 auto; align-self:stretch; display:flex; align-items:center; }
+.prompt__ghost,
+.prompt__ph{
+  position:absolute; inset-inline:0; top:0; white-space:pre-wrap;
+  font:var(--t-b-3); pointer-events:none;
+}
+.prompt__ghost{ visibility:hidden; }
+.prompt__ph{ color:var(--color-gray-light-2); max-height:2rem; overflow:hidden;
+  transition:opacity 350ms var(--ease-out); }
+.prompt.has-text .prompt__ph{ opacity:0; }
+.prompt__input{
+  position:relative; z-index:1; width:100%; min-width:0; max-height:2rem;
+  field-sizing:content;
+  resize:none; border:0; background:transparent; padding:0; outline:none;
+  font:var(--t-b-3); color:var(--color-gray-background-2);
+  caret-color:var(--color-orange);
+}
+.prompt__input::placeholder{ color:transparent; }
+
+.prompt__go{
+  position:relative; z-index:1; flex:none;
+  width:32px; height:32px; border:0; border-radius:9999px; cursor:pointer;
+  display:grid; place-items:center; color:#fff;
+  background-color:var(--color-gray);
+  transition:background-color 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+.prompt__go svg{ width:11px; height:11px; display:block; }
+.prompt__go:hover{ background-color:var(--color-orange); }
+.prompt__go:active{ transform:scale(.92); }
+.prompt__go:focus-visible{ outline:2px solid var(--color-orange); outline-offset:2px; }
+
+/* 底部状态行（模板附加：说明当前交互，可按需删） */
+.hint{
+  position:fixed; z-index:3; left:0; right:0; bottom:14px;
+  display:flex; justify-content:center;
+  font:var(--t-b-3); letter-spacing:-.02em; color:var(--color-gray-light-1);
+  pointer-events:none; opacity:0; transition:opacity .6s var(--ease-out) .8s;
+}
+.hint.is-in{ opacity:1; }
+.hint b{ font-weight:400; color:var(--color-gray); }
+/* 视口不够高时，这一行会和正文重叠 —— 直接不显示 */
+@media (max-height:760px){ .hint{ display:none; } }
+
+/* ============================================================================
+   响应式 / 无障碍
+   ========================================================================== */
+@media (max-width:1023px){
+  :root{ --t-h-1:400 2.5rem/1.05 var(--font-reckless-standard); }
+  .below{ margin-top:9rem; gap:1.75rem; }
+  .copy{ font-size:.9375rem; }
+}
+@media (max-width:640px){
+  :root{ --t-h-1:400 2rem/1.1 var(--font-reckless-standard); }
+  .hero__inner{ padding:4rem 1rem; }
+  .below{ margin-top:6rem; }
+}
+@media (prefers-reduced-motion:reduce){
+  .title,.below{ opacity:1; transform:none; animation:none !important; }
+  .card__img,.card__tag,.prompt__ph{ transition:none !important; }
+  .prompt.is-active .prompt__glow{ animation:none; background-position:50% 50%; }
+  .hint{ transition:none; opacity:1; }
+}
+</style>
+</head>
+<body>
+
+<div class="bg" aria-hidden="true"></div>
+
+<main class="hero">
+  <!-- ===== 影像环层 ===== -->
+  <div class="stage" id="stage" aria-hidden="true">
+    <div class="wordmark" id="wordmark">
+      <svg viewBox="0 0 1000 200" preserveAspectRatio="xMidYMid meet">
+        <text id="wordmarkText" x="500" y="150" text-anchor="middle"></text>
+      </svg>
+    </div>
+    <div class="ring" id="ring"></div>
+  </div>
+
+  <!-- ===== 文案层 ===== -->
+  <div class="hero__inner">
+    <h1 class="title" id="title">
+      <span class="sr-only" id="titleSR"></span>
+      <span class="title__sizer" id="titleSizer" aria-hidden="true"></span>
+      <canvas class="title__canvas" id="titleCanvas" aria-hidden="true"></canvas>
+    </h1>
+
+    <div class="below" id="below">
+      <p class="copy" id="copy"></p>
+
+      <div class="prompt-slot">
+        <form class="prompt" id="prompt" autocomplete="off" novalidate>
+          <span class="prompt__glow" aria-hidden="true"></span>
+          <div class="prompt__row">
+            <span class="prompt__icon" aria-hidden="true">
+              <svg viewBox="0 0 32 12" fill="none">
+                <path d="M3.2 3.4c2.6-1.1 4.8-.2 6.6 1.6 1.8 1.8 4 2.7 6.6 1.6 2.6-1.1 4.8-.2 6.6 1.6 1.8 1.8 4 2.7 6.6 1.6"
+                      stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <div class="prompt__field">
+              <span class="prompt__ghost" id="promptGhost" aria-hidden="true"></span>
+              <span class="prompt__ph" id="promptPh" aria-hidden="true"></span>
+              <textarea class="prompt__input" id="promptInput" rows="2"
+                        aria-label="Describe what you want to create"></textarea>
+            </div>
+            <button class="prompt__go" type="submit" aria-label="Submit">
+              <svg viewBox="0 0 11 11" fill="none" aria-hidden="true">
+                <path d="M5.5 9.5V1.5M5.5 1.5 2 5M5.5 1.5 9 5"
+                      stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- 底部操作提示：文字不写在这里，改 CONFIG.hint 即可（见文件下方脚本顶部） -->
+<div class="hint" id="hint"></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   0. 配置 —— 页面上所有能看到的文字都在这里，改这一个对象就够了
+   ----------------------------------------------------------------------------
+   可见文案总表（改哪一行 = 页面上哪一处变）：
+
+     CONFIG.brand              →  背景那行巨大的淡字标（默认 PORTFOLIO）
+     CONFIG.title.prefix       →  大标题前半句「Create any」
+     CONFIG.title.words[]      →  大标题中间那个逐块抖动的词（轮播，几个都行）
+     CONFIG.title.suffix       →  大标题后半句「you imagine」
+     CONFIG.title.accessible   →  读屏软件念的完整标题（页面上不显示）
+     CONFIG.description        →  标题下方那段说明文案（\n 换行）
+     CONFIG.prompts[]          →  输入框里循环打字的示例提示词
+     CONFIG.works[].t / .en    →  每幅作品的中文名 / 英文名（悬停标签 + 详情页）
+     CONFIG.works[].img        →  该作品的画廊图；ar 是它的宽高比（不裁切就靠这个）
+     CONFIG.hint               →  最底下那行操作提示（留空字符串即隐藏）
+     CONFIG.a11y.*             →  无障碍标签（页面上不显示）
+
+   不在 CONFIG 里的只有 <head> 里两处，在文件最上面：
+     <title>                     →  浏览器标签页标题
+     <meta name="description">   →  搜索引擎摘要
+
+   改作品名时记得 work.html 里的 WORKS 也要一起改（同一编号、同一名字）。
+   ========================================================================== */
+const CONFIG = {
+  /* 巨型字标（背景那层巨大的淡字） */
+  brand: "PORTFOLIO",
+
+  /* 大标题：中间那个词会逐块抖动地轮换（原站 prefix/words/suffix 逐字照抄） */
+  title: {
+    prefix: "Create any",
+    suffix: "you imagine",
+    words: ["image", "UI Design", "APP", "Web", "Figma", "ICON"],
+    accessible: "Create anything you imagine",
+  },
+
+  /* 说明文案（\n = 强制换行） */
+  description: "AI agents for creative work.\nBring your creative vision and collaborate with AI agents until the images, video, and audio land exactly as you imagined.",
+
+  /* 最底下那行操作提示；支持 HTML（<b> 会显示成加深色）。留空字符串 "" 即隐藏整行 */
+  hint: "悬停画面 <b>定格</b> · 点击 <b>打开作品</b> · 输入提示词回车 <b>重新爆发</b>",
+
+  /* 无障碍标签：读屏软件会念，页面上不显示 */
+  a11y: {
+    prompt: "Describe what you want to create",
+    submit: "Submit",
+  },
+
+  /* 输入框里循环打字的示例提示词（原站 r7 数组逐字照抄） */
+  prompts: [
+    "Design a product launch campaign for a new sneaker drop…",
+    "Storyboard a 30-second trailer for a sci-fi short film…",
+    "Generate ad creative for a summer skincare collection…",
+    "Mock up a landing page for a fintech mobile app…",
+    "Write a release teaser for an indie synth-pop single…",
+  ],
+
+  /* 作品数据：img 换成自己的图 / href 换成自己的详情页
+     ar = 图片宽高比。画廊图已统一处理成 3:4（1080×1440），整张完整显示、不裁切。
+     标题目前是占位编号；改成自己的作品名时，work.html 里的标题也要同步改。 */
+  works: [
+    { t:"大叻，2024", en:"Dalat, 2024", desc:"A rose-brick church clusters low and right, two-thirds of the sheet left as luminous sky. Fine ink linework fixes the architecture; watercolour handles the surrounding greenery, softened by dots and wet bleed. A blush oval stamped Dalat 2024 turns a drawing into a dated keepsake: resistance to disappearance.", img:"assets/works/main/01.webp", ar:0.75 },
+    { t:"信仰是一束光", en:"Faith Is a Light", desc:"A gothic spire cuts vertically through a rough coral brushstroke that reads as light itself: not light falling on the tower but light as ground. Crosshatched ink lines shape the architecture; dry-brush colour leaves paper breathing through. Above and below, scripted verses. Steadfast, luminous, quietly devotional.", img:"assets/works/main/02.webp", ar:0.75 },
+    { t:"有些火，不为取暖", en:"Some Fires Are Not Meant to Warm the World", desc:"A figure stands centred above a vast blank, dissolving into a radial burst of red and black streaks; a dim red disc is half-hidden behind the head. Photographic texture collides with brush-driven blur and print grain. Fire as rupture rather than warmth: a declaration of destructive, self-defining force.", img:"assets/works/main/03.webp", ar:0.75 },
+    { t:"风知道我要去哪里", en:"The Wind Knows Where I Am Going", desc:"A grey-violet dry-brush panel frames a small half-length portrait, face masked by a checkered scarf, gaze directed out of frame. Ink and thin watercolour leave him barely described; the huge blank beneath carries two handwritten lines. Identity withheld, direction asserted: the wind, not the map, knows.", img:"assets/works/main/04.webp", ar:0.75 },
+    { t:"继续走，世界在等你", en:"Keep Going, the World Is Waiting", desc:"The same figure returns inside the same grey-violet panel, now unrolling a blank white scroll across the centre: the only pure white, and the fulcrum of the composition. A companion piece to the portrait beside it, interior conviction answered by outward departure. The unwritten future is handed to the viewer.", img:"assets/works/main/05.webp", ar:0.75 },
+    { t:"田园时光，1967", en:"Pastoral Days, 1967", desc:"Seven-eighths of the page is bare; a single cow, two grazing companions and pale hills occupy only the lowest strip. Washed greens and clay yellows, light values only, as though bleached by time. Two birds provide the sole movement against the stillness. Pastoral, invented 1967: an elegy for slowness.", img:"assets/works/main/06.webp", ar:0.75 },
+    { t:"山坡旁，1964", en:"By the Hillside, 1964", desc:"A cow and her suckling calf hold the centre of a grassy island, the mother's gaze turned out of frame. Transparent glazes layer ochre and grey fleece against cerulean sky; grass built from dry short strokes. Warm against cool, vigilance against tenderness: the most naturalistic light in the series.", img:"assets/works/main/07.webp", ar:0.75 },
+    { t:"简约，是一切优雅的基调", en:"Simplicity Is the Keynote of All True Elegance", desc:"A photograph and its vector reduction are stacked in dialogue: identical tall spruce and hut, identical shadows. The illustration strips texture to flat shapes, keeping only tonal structure. Sunlight, real grass and curated olive sit above one another, demonstrating rather than quoting the motto: simplicity as keynote, elegance as residue.", img:"assets/works/main/08.webp", ar:0.75 },
+    { t:"在自然的怀抱里，遇见真正的自己", en:"In the Embrace of Nature", desc:"A flat vector valley of olive meadow, dark conifer wall, rocky orange mountain and small timber cabin occupies only the lowest sixth of the sheet. No gradients, no cast shadow; depth is built from layered silhouettes and tonal shifts. Nature abstracted into portable calm, numbered like an edition.", img:"assets/works/main/09.webp", ar:0.75 },
+    { t:"冒险在召唤", en:"Adventure Awaits", desc:"A chibi portrait of the traveller: olive hooded jacket, checkered scarf across the mouth, backpack straps, haloed by a soft green airbrushed oval. Grainy crayon brushes keep it deliberately unpolished; a yellow star is the single accent. A mascot image of anticipation, youth, and the call outward.", img:"assets/works/main/10.webp", ar:0.75 },
+    { t:"流浪的人，未必迷失", en:"Not All Who Wander Are Lost", desc:"A tiny walking figure is smeared into horizontal streaks of black and red on a large empty field; small black squares float at left, the epigraph sits low as a plinth. Motion blur turns walking into passing through. Tolkien's defence of drifting, restated for a figure without a face.", img:"assets/works/main/11.webp", ar:0.75 },
+    { t:"路会温柔地记得你", en:"Softly, the Road Remembers", desc:"A road curves out of frame through a torn-paper window of flat colour: slate hills, olive scrub, a single thin post. Muted earth tones, risograph grain and one yellow dash draw the eye onward. Enormous emptiness becomes silence, and the road, already remembering the walker, carries memory beyond the picture edge.", img:"assets/works/main/12.webp", ar:0.75 },
+    { t:"月、城堡与向日葵", en:"Nocturne for a Sunflower Moon", desc:"A stone crescent moon encloses a sleeping face, two complementary shapes locked in embrace; sunflowers arc between them while a miniature castle rests below. Cool slate blue meets high-chroma yellow, glazed with aged parchment. Digital painting mimics carved stone and porcelain skin. Together they form a wish-list: dream, fidelity, a castle held rather than reached.", img:"assets/works/main/13.webp", ar:0.75 },
+    { t:"小小烛火，大大心愿", en:"Little Flame, Big Wishes", desc:"A single slice of cake, drawn in shaky crayon strokes, floats at the top of an otherwise empty sheet. Five colours only; a cool blue candle makes the yellow flame burn brighter. Childlike, deliberately clumsy linework turns the vast blank below into the volume of a wish: small flame, enormous asking.", img:"assets/works/main/14.webp", ar:0.75 },
+    { t:"我们不是剪影", en:"We Are Not Silhouettes", desc:"A loose band of figures stands low in the frame beneath a single vertical shaft of vermilion, the only saturated colour on a near-monochrome paper field. Charcoal sweeps converge inward; long shadows steady the horizon. Silhouettes that refuse anonymity: a collective pause, dignified, before light returns.", img:"assets/works/main/15.webp", ar:0.75 },
+    { t:"花园，1978", en:"Garden, 1978", desc:"Pen-and-wash watercolour builds a floating garden island: potted trees and pink blossom anchored left, a boardwalk leading right to a thatched cabin, distant hills dissolving into paper. Wet-in-wet washes, dry-brush fibres, untouched white as light. The invented year 1978 turns cultivation into recollection: a small, tendered paradise.", img:"assets/works/main/16.webp", ar:0.75 },
+    { t:"静下来，便知", en:"Be Still, and Know", desc:"A palm-sized square of opaque paint floats high on an empty page: an arch of sand, ochre and dusty rose, a wooden crucifix above, a small pale figure at its centre. Coarse bristle edges, fresco-like residue. Below, two handwritten words of Psalm 46:10. Scale and silence, not ornament, carry the devotion.", img:"assets/works/main/17.webp", ar:0.75 },
+    { t:"归隐，1987", en:"Retreat, 1987", desc:"A boardwalk crosses dark water to a thatched cabin, hedged by flowering shrubs; a small stone figure sits at right. Layered greens, warm timber and near-black water, with white blossoms replacing sunlight. Sponge-dabbed foliage and wet washes make a sanctuary: separated by water, connected by a bridge one need not cross.", img:"assets/works/main/18.webp", ar:0.75 },
+    { t:"山抱一个韵字", en:"Yun: An Echo Between Mountains", desc:"A wordmark that is a landscape: three peaks — sage and two deep pines — cradle a white disc holding the calligraphic character Yun. A single gold line draws water below; a red seal anchors the corner. Sound becomes scenery, and the aftertone of tea is written as mountains holding one word.", img:"assets/works/main/19.webp", ar:0.75 },
+    { t:"石上茶事", en:"Tea on Stone", desc:"Brand still life on stacked slate: a gnarled branch, a white porcelain deer, two cups and a pitcher bearing the Yun mark, one dark bloom at its foot, all against molten gold. Warm side light models every glaze and stone edge. An old literati table is restaged for a new tea house.", img:"assets/works/main/20.webp", ar:0.75 },
+    { t:"纸上山水", en:"Mountains on Paper", desc:"A take-away cup becomes a scroll: the Yun landscape printed small on white paper, held sharp while stacked cups and lids blur into the dark room behind. Rim light rounds each mouth; shallow focus locks the gaze. The disposable object is quietly promoted, carrying mountains and water out the door.", img:"assets/works/main/21.webp", ar:0.75 },
+    { t:"折页里的呼吸", en:"The Quiet Fold", desc:"Stationery speaks in a whisper: a folded card opens to a green mountain and the circled Yun, beside a business card and a single pencil on generous cream. High-key light erases almost every shadow. The identity lives in restraint — blank space kept as good manners, ink spent only where it must be.", img:"assets/works/main/22.webp", ar:0.75 },
+    { t:"绿的秩序", en:"Order in Green", desc:"The system laid out in isometric discipline: deep-green boxes in four sizes, white tubes and a round soap marching along one diagonal on cream, the Yun landscape wrapping every surface. Soft top light, short shadows, two colours and a gold line — a family portrait of restraint, rhythm and repetition.", img:"assets/works/main/23.webp", ar:0.75 },
+    { t:"把早晨调成慢速", en:"Where Slow Mornings Begin", desc:"A lifestyle app opens on cream white: an oversized greeting, pill filters, and one forest-green action colour. A full-bleed photograph of linen and curtain light anchors the grid; two warm thumbnails continue the palette. Hierarchy reads like a magazine contents page: everything invites slow reading, nothing shouts.", img:"assets/works/main/24.webp", ar:0.75 },
+    { t:"四个入口", en:"Four Doors into the Day", desc:"Explore turns taxonomy into colour: four soft-cornered tiles — terracotta, olive, slate blue and brick red — carry white type and a faint diagonal sheen above quiet collection rows. Navigation becomes a set of doors, and each colour a room in the same calm house. Choosing a category feels like choosing a mood.", img:"assets/works/main/25.webp", ar:0.75 },
+    { t:"细读一个早晨", en:"Reading a Morning Closely", desc:"The guide opens like a page from a quiet magazine: unmade linen washed in window light, then title, byline and a short checklist of small needs, ticked in muted green. Generous margins keep the reading line pure. Knowledge is framed as a keepsake — the save button waits below like a bookmark.", img:"assets/works/main/26.webp", ar:0.75 },
+    { t:"存给慢一点的日子", en:"Saved for a Slower Day", desc:"A saved list keeps its promises in rows: thumbnail, category, title and a small green bookmark, each entry stamped with its own quiet timestamp. Segmented filters and two collection cards add order without weight. The screen becomes a shelf of postponed pleasures, patiently waiting for a slower day.", img:"assets/works/main/27.webp", ar:0.75 },
+    { t:"一个读者的自画像", en:"The Reader, Collected", desc:"Profile as self-portrait: an avatar and email, three counting numbers — saved, collections, following — and one deep-green card carrying the product's promise, closed by small orderly preference rows. No photograph softens it. Identity here is quantitative and calm: a life measured in what one chose to keep.", img:"assets/works/main/28.webp", ar:0.75 },
+    { t:"住进一把椅子之前", en:"Before You Move In", desc:"A furniture app pitched in five floating screens on black: catalogue cards, a violet neon room with a purple armchair, a product detail, a feature grid and a wireframe room awaiting furniture. Placeholder text betrays its concept-stage nature. The promise is spatial: rehearse a life before buying the chair.", img:"assets/works/main/29.webp", ar:0.75 },
+    { t:"毛孩子的主页", en:"A Home Full of Paws", desc:"A pet community app centred on a corgi: profile card, glossy clay-rendered mascot, icon banners and a friend feed, floating above a tilted cascade of sibling screens in blue and apricot. Soft 3D rendering and placeholder text mark the concept. Here the pet holds the account, and cuteness is the interface.", img:"assets/works/main/30.webp", ar:0.75 },
+    { t:"负重自白", en:"Who I Am", desc:"A young trekker faces the camera under hard studio light, chartreuse shell and olive pack splitting the frame into two greens. Distressed print texture, scratched edges and a handwritten caption overlay the photoreal portrait. Gear becomes identity: the declaration is worn on the back, not spoken aloud.", img:"assets/works/main/31.webp", ar:0.75 },
+    { t:"群鸟离纸", en:"Ascending in Halftone", desc:"A stencil-printed flock lifts through a tall grey frame: pale cyan birds rendered in visible halftone dots, swirling upward and dissolving into pure grain at the bottom, woodgrain breathing through the ink. Take-off is frozen mid-air — freedom and disappearance written in the same dissolving dot pattern.", img:"assets/works/main/32.webp", ar:0.75 },
+    { t:"从一叶到一盏", en:"From Leaf to Cup", desc:"An ink-block diagram of tea's whole life: leaf, mountain, terraced fields, a picking hand, a rolling worker, bowl and pot circling the central character cha with one red seal. Coarse carved edges and stencil grain on paper white hold the light. A single word keeps the cycle, from hillside to cup.", img:"assets/works/main/33.webp", ar:0.75 },
+    { t:"钟声失真", en:"The Pink Church, Half-Remembered", desc:"A gothic pink church — Da Lat's landmark silhouette — stands intact while horizontal smears drag its flanks into static, as if the memory were losing signal. Aged postcard paper, muted rose against grey-teal. Travel reduced to a cached image: the tower holds, and the rest is weather.", img:"assets/works/main/34.webp", ar:0.75 },
+  ],
+
+  /* 影像环几何 —— 全部来自参考站 WebGL 场景源码，不要随意改 */
+  ring: {
+    panelWidth:  .75,   // 画面宽 = panelWidth × 视野宽（原站 isDesktop ? .75 : 1.2）
+    panelWidthMobile: 1.2,
+    flyDistance: 1.65,  // 飞出终点 = flyDistance × 视野宽（原站 vWidth * 1.65）
+    interval:    900,   // 每 900ms 左右各发射一幅（原站 startFiring 默认 interval）
+    duration:    9.6,   // 单幅从中心飞到边界耗时 9.6s（原站 duration）
+    reveal:      1.75,  // 出场渐进 1.75s power3.inOut
+    zoomFrom:    1.2,   // 整组缩放 1.2 → 0.5（原站 animateZoomOut）
+    zoomTo:      0.5,
+    zoomTime:    1.5,
+    cylindrical: 1,     /* 柱面纵向压缩终值（原站 distortionCylindricalFactor = 0.7）。
+                           原站靠它做「圆柱感」，代价是越靠屏幕两侧画面被纵向拉伸越多：
+                           实测 cf=0.7 时最外侧画面被拉长 42.9%（比例 0.75 → 0.525），
+                           靠近中心的才 0%。本页展示的是绘画作品（带排版文字），
+                           拉伸即失真，所以默认关掉（=1 即零拉伸）。想要原站那种圆柱感，
+                           把这里改回 0.7 即可。 */
+    corner:      4,     // 圆角百分比（原站 SDF 半径 0.04）
+    desktopMin:  1024,  // 与 CSS 的 lg 断点保持一致（原站按设备判定 isDesktop）
+  },
+
+  /* 打字机（原站 characterDelayMs: 24 / 淡出 350ms） */
+  typeSpeed: 24,
+  typeHold:  1500,
+};
+
+/* ============================================================================
+   1. 小工具
+   ========================================================================== */
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+/** GLSL/GSAP 同款 smoothstep(edge0, edge1, x) */
+function smoothstep(e0, e1, x){
+  const t = clamp01((x - e0) / (e1 - e0));
+  return t * t * (3 - 2 * t);
+}
+/* GSAP 缓动的解析式（因为整条时间线是按 rAF 自己算的，不用 CSS 动画） */
+const easeInOutQuart = t => t < .5 ? 8*t*t*t*t : 1 - Math.pow(-2*t + 2, 4) / 2;  // power3.inOut
+const easeOutQuart   = t => 1 - Math.pow(1 - t, 4);                                // power3.out
+const easeOutQuint   = t => 1 - Math.pow(1 - t, 5);                                // power4.out
+const easeOutExpo    = t => t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);                 // easeOutExpo
+const easeInOutCubic = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;      // 标题换字宽度插值
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ============================================================================
+   2. 影像环引擎
+   ----------------------------------------------------------------------------
+   参考站的做法（源码逐个常数还原）：
+     · 每幅画面是一张 □ 贴图平面，宽度 = .75 × 视野宽
+     · 画面沿 idx 奇偶分成左右两队，每 900ms 各发射一幅
+     · 单幅生命周期 9.6s：位置 x = ±1.65×视野宽×s，缩放走 0.125→1 的包络 n
+     · 开场先把两队按 0.09375 的进度均匀铺开（preDistributeCards），形成连续人流
+     · 整组先 scale 1.2，开场 1.5s 内压到 0.5
+     · 后期再叠一层「柱面压缩」：越靠屏幕两侧，纵向拉伸越多（原站 WebGL 后处理）
+   ========================================================================== */
+const R = {
+  W:0, H:0,        // 舞台尺寸（px）
+  base:0,          // 基准画面宽（已折算 zoomTo）
+  G:1.2,           // 整组缩放（开场 1.2 → 0.5）
+  reveal:1,        // 出场渐进系数
+  cf:1,            // 柱面因子（开场 1 → 0.7）
+  fired:false,     // 是否已开始发射
+  acc:0,           // 发射累加器
+  iL:0, iR:0,
+  paused:false,
+  cards:[], left:[], right:[],
+};
+
+const cfg = CONFIG.ring;
+const stage = document.getElementById("stage");
+const ringEl = document.getElementById("ring");
+
+function buildRing(){
+  const frag = document.createDocumentFragment();
+  CONFIG.works.forEach((w, i) => {
+    const dir = (i % 2 === 0) ? -1 : 1;               // 原站：idx % 2 === 0 → left
+    const el = document.createElement("div");
+    el.className = "card";
+    el.style.setProperty("--ar", w.ar || 1);
+    el.style.setProperty("--i", i);
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "card__btn";
+    btn.setAttribute("aria-label", `${w.t} ${w.en}`);
+    btn.addEventListener("click", () => { location.href = w.href || ("work.html?id=" + (i + 1)); });
+
+    const img = document.createElement("img");
+    img.className = "card__img";
+    img.src = w.img;
+    img.alt = w.t;
+    img.decoding = "async";
+    img.addEventListener("load", () => {
+      if (img.naturalWidth && img.naturalHeight){
+        const ar = img.naturalWidth / img.naturalHeight;
+        el.style.setProperty("--ar", ar.toFixed(4));
+        card.ar = ar;
+      }
+    });
+
+    const tag = document.createElement("span");
+    tag.className = "card__tag";
+    tag.innerHTML = `<span>${w.t}</span><span>${w.en}</span>`;
+
+    btn.append(img, tag);
+    el.append(btn);
+    frag.append(el);
+
+    const card = { el, btn, img, dir, p:0, firing:false, held:false, ar: w.ar || 1 };
+    // 悬停 = 定格这一幅 + 暂停继续发射（否则画面会从光标下飞走，点不到也读不了标签）
+    btn.addEventListener("pointerenter", () => { card.held = true; R.paused = true; });
+    btn.addEventListener("pointerleave", () => { card.held = false; R.paused = false; });
+    R.cards.push(card);
+    (dir < 0 ? R.left : R.right).push(card);
+  });
+  ringEl.append(frag);
+}
+
+/** 舞台尺寸变化：只需更新基准宽（画面尺寸固定，逐帧只改 transform） */
+function measure(){
+  R.W = stage.clientWidth;
+  R.H = stage.clientHeight;
+  R.isDesktop = R.W >= cfg.desktopMin;                 // 原站 et.isDesktop
+  R.base = (R.isDesktop ? cfg.panelWidth : cfg.panelWidthMobile) * R.W * cfg.zoomTo;
+  document.documentElement.style.setProperty("--pw", R.base.toFixed(2) + "px");
+  document.documentElement.style.setProperty("--radius", cfg.corner + "%");
+}
+
+/** 原站 preDistributeCards：按 interval/(1000·duration) 的步长把两队均匀铺开 */
+function distribute(){
+  const step = cfg.interval / (1000 * cfg.duration);
+  for (const pool of [R.left, R.right]){
+    for (let k = 0; k < pool.length; k++){
+      const p0 = k * step;
+      if (p0 >= 1) break;
+      startFire(pool[k], p0);
+    }
+  }
+}
+function startFire(c, p0){
+  c.p = p0 || 0;
+  c.firing = true;
+}
+function fireNext(pool, key){
+  const n = pool.length;
+  for (let k = 0; k < n; k++){
+    const idx = (R[key] + k) % n;
+    if (!pool[idx].firing){
+      startFire(pool[idx], 0);
+      R[key] = (idx + 1) % n;
+      return;
+    }
+  }
+}
+
+/** 落位 + 绘制一幅画面 */
+function place(c){
+  const p = c.p * R.reveal;                                  // 原站 i = fireProgress * revealFactor
+  const S = smoothstep(0, 1, p);
+  const s = .5 * S * S + .5 * S;                             // 原站 .5*easeInQuad(s)+.5*s
+  const r = R.isDesktop ? .2 : .3;                           // 原站 isDesktop ? .2 : .3
+  const n = .125 * smoothstep(0, .15, p) + .875 * smoothstep(r, 1, p);
+
+  const X  = c.dir * cfg.flyDistance * R.W * s * R.G;        // px
+  const k  = n * (R.G / cfg.zoomTo);                         // 基准宽已折算 zoomTo
+
+  // 原站后处理：柱面压缩 = 越靠屏幕两侧，纵向越拉伸
+  const fx = .5 + X / R.W;
+  const xF = Math.min(1, Math.pow(2 * Math.abs(fx - .5), 2));
+  const kY = 1 / (1 - xF * (1 - R.cf));
+
+  const halfW = R.base * k * .5;
+  const off = Math.abs(X) - halfW > R.W * .5 + 8;            // 完全出画 → 不绘制
+
+  c.el.style.transform = `translate(-50%,-50%) translate3d(${X.toFixed(2)}px,0,0) scale(${k.toFixed(4)},${(k * kY).toFixed(4)})`;
+  c.el.style.zIndex = String(100000 - Math.round((s + n) * 1000));   // 原站 renderOrder = s + n
+  c.el.style.visibility = (off || k < .0015) ? "hidden" : "visible";
+  c.el.classList.toggle("is-live", !off && k > .05);
+}
+
+let last = performance.now(), t0 = last, introDone = false;
+function frame(now){
+  const dt = Math.min(now - last, 100); last = now;
+  const el = now - t0;
+
+  if (reduceMotion){
+    // 无动画模式：直接按稳态把画面摆好，一帧即可
+    if (!introDone){ distribute(); R.reveal = 1; R.G = cfg.zoomTo; R.cf = cfg.cylindrical;
+      for (const c of R.cards) place(c); introDone = true; }
+    return;
+  }
+
+  // 整组缩放 1.2 → 0.5（zoomTime 内 power3.inOut）
+  if (R.fired) R.G = lerp(cfg.zoomFrom, cfg.zoomTo, easeInOutQuart(clamp01((el - 0) / (cfg.zoomTime * 1000))));
+  else R.G = cfg.zoomFrom;
+
+  // 柱面因子 1 → .7（2s power4.out），与发射同时开始
+  R.cf = R.fired ? lerp(1, cfg.cylindrical, easeOutQuint(clamp01(el / 2000))) : 1;
+
+  // 出场渐进 0 → 1（1.75s power3.inOut）
+  if (R.fired && R.reveal < 1) R.reveal = easeInOutQuart(clamp01(el / (cfg.reveal * 1000)));
+
+  if (R.fired){
+    R.acc += dt;
+    while (R.acc >= cfg.interval){
+      R.acc -= cfg.interval;
+      if (!R.paused){ fireNext(R.left, "iL"); fireNext(R.right, "iR"); }
+    }
+    for (const c of R.cards){
+      if (!c.firing) continue;
+      if (c.held){ place(c); continue; }        // 悬停定格：保持不动但仍然绘制
+      c.p += dt / (1000 * cfg.duration);
+      if (c.p >= 1){                      // 原站：飞完即 innerGroup.visible = false 并复位
+        c.firing = false; c.p = 0;
+        c.el.style.visibility = "hidden";
+        c.el.classList.remove("is-live");
+        continue;
+      }
+      place(c);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ============================================================================
+   3. 大标题：canvas 逐块抖动（逐行复刻参考站的 canvas 渲染器）
+   ----------------------------------------------------------------------------
+   · 隐形的量体 span 决定 h1 尺寸，真正的字画在 canvas 上
+   · 两套图层：d = 前后缀文字，p = 中间那个词
+   · 换字时把 p 层降采样成「块」再放大回来（imageSmoothingEnabled=false），
+     块数 c = 1 + round((maxBlock-1)·sin(π·进度))，于是出现方块马赛克
+   ========================================================================== */
+const TITLE = { words: CONFIG.title.words, total:0, seg:[] };
+
+function initTitle(){
+  const h1 = document.getElementById("title");
+  const sizer = document.getElementById("titleSizer");
+  const canvas = document.getElementById("titleCanvas");
+  const srEl = document.getElementById("titleSR");
+  const copyEl = document.getElementById("copy");
+  const markEl = document.getElementById("wordmarkText");
+  const hintEl = document.getElementById("hint");
+
+  const { prefix, suffix, words, accessible } = CONFIG.title;
+  /* 量体层用「最宽的那个词」排版，这样 h1 的宽度永远够放下最长的词、标题不会跳行。
+     先按字符数猜一个（字体还没加载时也能用），真正定稿在 metrics() 里按像素宽重选。 */
+  let longest = words.reduce((a, b) => b.length > a.length ? b : a);
+  sizer.textContent = `${prefix} ${longest} ${suffix}`;
+  srEl.textContent = accessible;
+  h1.setAttribute("aria-label", accessible);
+  markEl.textContent = CONFIG.brand;
+  copyEl.innerHTML = CONFIG.description.replace(/\n/g, "<br>");
+
+  // 底部提示行：内容来自 CONFIG.hint；留空则整行不显示
+  if (CONFIG.hint && CONFIG.hint.trim()){
+    hintEl.innerHTML = CONFIG.hint;
+  } else {
+    hintEl.remove();
+  }
+  // 无障碍标签
+  document.getElementById("promptInput").setAttribute("aria-label", CONFIG.a11y.prompt);
+  document.querySelector(".prompt__go").setAttribute("aria-label", CONFIG.a11y.submit);
+
+  // 时间线：hold 1300ms + swap 650ms（原站逐字照抄）
+  TITLE.seg = words.flatMap((w, i) => [
+    { type: "hold", word: w, ms: 1300 },
+    { type: "swap", from: w, to: words[(i + 1) % words.length], ms: 650 },
+  ]);
+  TITLE.total = TITLE.seg.reduce((a, s) => a + s.ms, 0);
+
+  if (reduceMotion){                       // 无动画：静态画一个词
+    sizer.textContent = `${prefix} ${words[0]} ${suffix}`;
+    return;
+  }
+
+  const ctx = canvas.getContext("2d");
+  const textC = document.createElement("canvas"), textX = textC.getContext("2d");   // d 层
+  const slotC = document.createElement("canvas"), slotX = slotC.getContext("2d");   // p 层
+  const blockC = document.createElement("canvas"), blockX = blockC.getContext("2d");// 块层
+  const M = { w:0, h:0, bleed:0, dpr:1, font:"", color:"", fontSize:0, lineHeight:0,
+              ascent:0, descent:0, space:0, widths:new Map(), maxSlot:0, maxBlock:2 };
+  let key = null, raf = 0, dead = false;
+
+  const q = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+  const segAt = ms => {
+    let r = ms % TITLE.total;
+    for (const s of TITLE.seg){ if (r < s.ms) return { seg:s, p:r / s.ms }; r -= s.ms; }
+    return { seg: TITLE.seg[0], p:0 };
+  };
+
+  function metrics(){
+    const cs = getComputedStyle(h1);
+    M.fontSize   = parseFloat(cs.fontSize);
+    M.lineHeight = parseFloat(cs.lineHeight) || M.fontSize * 1.1;
+    M.font       = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    M.color      = cs.color;
+    M.w = h1.offsetWidth; M.h = h1.offsetHeight;
+    M.bleed = Math.round(.3 * M.fontSize);
+    M.dpr = window.devicePixelRatio || 1;
+    M.maxBlock = Math.max(2, Math.round(M.fontSize / 8));       // 原站 rj = 1/8
+
+    const cw = M.w + 2 * M.bleed, ch = M.h + 2 * M.bleed;
+    for (const c of [canvas, textC, slotC, blockC]){ c.width = Math.round(cw * M.dpr); c.height = Math.round(ch * M.dpr); }
+    for (const c of [ctx, textX, slotX]){
+      c.setTransform(M.dpr, 0, 0, M.dpr, 0, 0);
+      c.font = M.font;
+      if ("letterSpacing" in c) c.letterSpacing = cs.letterSpacing;
+    }
+    canvas.style.width = cw + "px"; canvas.style.height = ch + "px";
+    canvas.style.top = -M.bleed + "px"; canvas.style.left = -M.bleed + "px";
+
+    // 每个词的像素宽 / 空格宽
+    M.space = textX.measureText(" ").width;
+    M.widths = new Map(words.map(w => [w, textX.measureText(w).width]));
+    M.maxSlot = Math.max(...M.widths.values());
+
+    /* 量体层必须按「像素上最宽」的词排版，不能按字符数 ——
+       例如 "UI Design"(9 字符) 比 "campaign"(8 字符) 字符多，但中间那个空格很窄，
+       真正的宽度排序要用 measureText 说话。换词表后这里会自动重新选。 */
+    const widest = words.reduce((a, b) => M.widths.get(b) > M.widths.get(a) ? b : a, words[0]);
+    const want = `${prefix} ${widest} ${suffix}`;
+    if (sizer.textContent !== want){
+      longest = widest;
+      sizer.textContent = want;    // 量体层变了 → h1 尺寸变了，重跑一次再取尺寸
+      metrics();
+      return;
+    }
+
+    const m = textX.measureText(longest);
+    M.ascent  = m.fontBoundingBoxAscent  ?? M.fontSize * .8;
+    M.descent = m.fontBoundingBoxDescent ?? M.fontSize * .2;
+    key = null;
+  }
+
+  /** 画两套图层，返回中间词的落位矩形 */
+  function layout(word, drawW){
+    const items = [
+      ...prefix.split(" ").map(t => ({ text:t })),
+      { slot: word },
+      ...suffix.split(" ").map(t => ({ text:t })),
+    ];
+    for (const it of items){
+      if (it.slot !== undefined){ it.drawW = drawW; it.layoutW = M.maxSlot; }
+      else { it.drawW = textX.measureText(it.text).width; it.layoutW = it.drawW; }
+    }
+    const lines = [[]]; let cur = 0;
+    for (const it of items){
+      const line = lines[lines.length - 1];
+      const w = line.length ? cur + M.space + it.layoutW : it.layoutW;
+      if (line.length && w > 1.02 * M.w){ lines.push([it]); cur = it.layoutW; }
+      else { line.push(it); cur = w; }
+    }
+    for (const c of [textX, slotX]){
+      c.clearRect(0, 0, M.w + 2 * M.bleed, M.h + 2 * M.bleed);
+      c.fillStyle = M.color; c.textBaseline = "alphabetic";
+    }
+    const top = M.bleed + (M.h - lines.length * M.lineHeight) / 2;
+    let rect = null;
+    lines.forEach((line, li) => {
+      let x = M.bleed + (M.w - line.reduce((a, it, i) => a + it.drawW + (i ? M.space : 0), 0)) / 2;
+      const ly = top + li * M.lineHeight;
+      const base = ly + (M.lineHeight - (M.ascent + M.descent)) / 2 + M.ascent;
+      for (const it of line){
+        if (it.slot !== undefined){
+          slotX.textAlign = "center";
+          slotX.fillText(it.slot, x + it.drawW / 2, base);
+          rect = { x, y: ly, w: it.drawW, h: M.lineHeight };
+        } else {
+          textX.textAlign = "left";
+          textX.fillText(it.text, x, base);
+        }
+        x += it.drawW + M.space;
+      }
+    });
+    return rect;
+  }
+
+  function compose(blocks, rect){
+    const cw = M.w + 2 * M.bleed, ch = M.h + 2 * M.bleed;
+    ctx.setTransform(M.dpr, 0, 0, M.dpr, 0, 0);
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(textC, 0, 0, cw, ch);                     // 前后缀
+    if (blocks <= 1){ ctx.drawImage(slotC, 0, 0, cw, ch); return; }   // 完整词
+
+    // 把「词」层降采样成 blocks × blocks 的小图，再按最近邻放大 → 方块马赛克
+    const bw = Math.max(1, Math.ceil(cw / blocks)), bh = Math.max(1, Math.ceil(ch / blocks));
+    blockX.setTransform(1, 0, 0, 1, 0, 0);
+    blockX.clearRect(0, 0, bw, bh);
+    blockX.imageSmoothingEnabled = true;
+    blockX.drawImage(slotC, 0, 0, slotC.width, slotC.height, 0, 0, bw, bh);
+
+    const pad = .2 * M.fontSize;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rect.x - pad, rect.y - pad, rect.w + 2 * pad, rect.h + 2 * pad);
+    ctx.clip();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(blockC, 0, 0, bw, bh, 0, 0, bw * blocks, bh * blocks);
+    ctx.restore();
+  }
+
+  function tick(){
+    if (dead) return;
+    const ms = performance.now() - (TITLE.startedAt || 0) - 700;   // 原站 x = now + 700
+    let word, blocks, drawW;
+    if (ms < 0){ word = words[0]; blocks = 1; drawW = M.widths.get(word); }
+    else {
+      const { seg, p } = segAt(ms);
+      if (seg.type === "hold"){ word = seg.word; blocks = 1; drawW = M.widths.get(word); }
+      else {
+        word = p < .5 ? seg.from : seg.to;
+        blocks = 1 + Math.round((M.maxBlock - 1) * Math.sin(Math.PI * p));
+        const e = easeInOutCubic(p);
+        drawW = M.widths.get(seg.from) * (1 - e) + M.widths.get(seg.to) * e;
+      }
+    }
+    const k = `${word}:${blocks}:${Math.round(drawW)}:${M.w}x${M.h}`;
+    if (k !== key){
+      key = k;
+      canvas.dataset.word = word;
+      canvas.dataset.block = String(blocks);
+      compose(blocks, layout(word, drawW));
+    }
+    raf = requestAnimationFrame(tick);
+  }
+
+  TITLE.startedAt = performance.now();
+  metrics();
+  document.fonts && document.fonts.ready.then(() => { if (!dead){ metrics(); tick(); } });
+  new ResizeObserver(() => { metrics(); }).observe(h1);
+  requestAnimationFrame(tick);
+
+  TITLE.kill = () => { dead = true; cancelAnimationFrame(raf); };
+}
+
+/* ============================================================================
+   4. 提示词胶囊：打字机占位符 + 输入 + 提交爆发
+   ========================================================================== */
+function initPrompt(){
+  const form  = document.getElementById("prompt");
+  const input = document.getElementById("promptInput");
+  const ph    = document.getElementById("promptPh");
+  const ghost = document.getElementById("promptGhost");
+
+  if (reduceMotion){ ph.textContent = CONFIG.prompts[0]; }
+  else {
+    let i = 0, n = 0, timer = 0;
+    const type = () => {
+      const text = CONFIG.prompts[i];
+      ghost.textContent = text;                    // 撑住两行高度，避免布局跳动
+      n++;
+      ph.textContent = text.slice(0, n);
+      if (n < text.length) timer = setTimeout(type, CONFIG.typeSpeed);
+      else {
+        timer = setTimeout(() => {
+          ph.style.opacity = "0";                  // 淡出 350ms 后换下一条
+          timer = setTimeout(() => {
+            i = (i + 1) % CONFIG.prompts.length; n = 0;
+            ph.style.opacity = ""; type();
+          }, 350);
+        }, CONFIG.typeHold);
+      }
+    };
+    type();
+    TITLE.killPrompt = () => clearTimeout(timer);
+  }
+
+  const sync = () => form.classList.toggle("has-text", input.value.trim() !== "");
+  input.addEventListener("input", sync);
+
+  form.addEventListener("focusin", () => form.classList.add("is-active"));
+  form.addEventListener("focusout", () => form.classList.remove("is-active"));
+
+  // 提交 = 重新爆发一次（模板自己的交互反馈）
+  form.addEventListener("submit", e => {
+    e.preventDefault();
+    burst();
+    input.blur();
+  });
+}
+
+/** 重放整段影像环：重新铺开 + 重新缩放 + 重新揭示 */
+function burst(){
+  if (reduceMotion) return;
+  R.acc = 0; R.iL = 0; R.iR = 0; R.reveal = 0; R.cf = 1;
+  R.G = cfg.zoomFrom;
+  t0 = performance.now();
+  R.fired = true;
+  distribute();
+}
+
+/* ============================================================================
+   5. 开场编排（原站时序逐条还原）
+   ----------------------------------------------------------------------------
+   · svg 字标 scale 0 → .45，3s，delay .3s，power3.out
+   · 资源就绪或 2s 后触发影像环（取先到者）
+   · 再过 1s 标题与文案入场（1.5s easeOutExpo，文案 delay .2s）
+   ========================================================================== */
+function intro(){
+  const wm = document.getElementById("wordmark");
+  const title = document.getElementById("title");
+  const below = document.getElementById("below");
+  const hint = document.getElementById("hint");
+
+  if (reduceMotion){
+    wm.style.transform = `scale(${.45})`;
+    title.classList.add("is-in"); below.classList.add("is-in");
+    if (hint) hint.classList.add("is-in");
+    R.fired = true; R.reveal = 1; R.G = cfg.zoomTo; R.cf = cfg.cylindrical;
+    distribute(); for (const c of R.cards) place(c);
+    return;
+  }
+
+  // 字标：scale 0 → .45 / 3s / delay .3s / power3.out
+  const wStart = performance.now() + 300;
+  (function wstep(){
+    const t = clamp01((performance.now() - wStart) / 3000);
+    wm.style.transform = `scale(${(.45 * easeOutQuart(t)).toFixed(4)})`;
+    if (t < 1) requestAnimationFrame(wstep);
+  })();
+
+  let done = false;
+  const show = () => {
+    if (done) return; done = true;
+    t0 = performance.now();
+    R.fired = true;
+    distribute();                       // 原站 preDistributeCards()
+    setTimeout(() => {                  // 再过 1s → onIntroComplete
+      title.classList.add("is-in");
+      below.classList.add("is-in");
+      if (hint) hint.classList.add("is-in");   // CONFIG.hint 为空时这一行已被移除
+    }, 1000);
+  };
+  const guard = setTimeout(show, 2000);  // 原站：资源就绪或 2s，取先到者
+  Promise.all(R.cards.map(c => c.img.complete
+      ? Promise.resolve()
+      : new Promise(r => { c.img.addEventListener("load", r); c.img.addEventListener("error", r); })))
+    .then(() => { clearTimeout(guard); show(); });
+}
+
+/* ============================================================================
+   6. 启动
+   ========================================================================== */
+buildRing();
+measure();
+initTitle();
+initPrompt();
+intro();
+requestAnimationFrame(frame);
+
+window.addEventListener("resize", () => { measure(); });
+// 标签页不可见时把时间基准重置，避免回来时一帧跳一大步
+document.addEventListener("visibilitychange", () => { last = performance.now(); });
+
+/* 对外句柄：方便在控制台调参 / 被外部代码触发
+   例：__gallery.burst()  重放整段爆发
+       __gallery.CONFIG.ring.duration = 4  改完再 burst() 即生效      */
+window.__gallery = { R, CONFIG, burst, place, distribute, measure };
+</script>
+</body>
+</html>

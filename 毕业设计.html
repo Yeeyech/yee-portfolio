@@ -1,0 +1,1566 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI 视频生成流程 · 两个示例</title>
+<meta name="description" content="AI 视频生成流程界面：左侧播放器查看节点产物，右侧画布同时呈现两条流程 —— 提示词 → 初始人物 → 全景 / 特写两条视频。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* finesse · register=product · A=warm-graphite / coral+teal · B=geist + geist-mono
+ * C=canvas-dominant split, inset stage · D=canvas2d seeded film + svg wire draw
+ * E=film-lab contact sheet · SOUL=7 SPECTACLE=6 DENSITY=7
+ * rejected defaults: "AI tool -> near-black + violet orb + sparkle"; 2nd order "not-purple -> Linear indigo";
+ * the orange here is a burnt coral carrying the wires of a canvas, with a teal partner for "已自动完成". */
+
+:root{
+  /* substrate: warm graphite, tinted toward the accent hue */
+  --page:#131211;
+  --bg:#1a1917;
+  --panel-2:#232120;
+  --panel-3:#2b2826;
+  --border:rgba(255,255,255,.075);
+  --border-2:rgba(255,255,255,.13);
+  --border-3:rgba(255,255,255,.22);
+
+  /* ink */
+  --ink-1:#f4f1ec;
+  --ink-2:#b9b3a9;
+  --ink-3:#948d82;
+
+  /* brand */
+  --accent:#ff7a3c;
+  --accent-hover:#ff8b55;
+  --accent-2:#38d6c4;
+  --accent-soft:rgba(255,122,60,.14);
+  --accent-soft-2:rgba(255,122,60,.26);
+  --accent-ghost:rgba(255,122,60,.07);
+  --accent-2-soft:rgba(56,214,196,.14);
+  --on-accent:#1b0d05;
+  --glow:rgba(255,122,60,.32);
+  --wire:rgba(255,122,60,.62);
+  --wire-lit:rgba(255,122,60,.95);
+  --wire-dim:rgba(255,255,255,.10);
+
+  /* a text node's artefact is words, so the stage turns into paper */
+  --board:#f2ede4;
+  --board-dot:rgba(36,31,26,.075);
+  --board-ink:#241f1a;
+  --board-ink-2:#6b6155;
+
+  /* semantic */
+  --auto:var(--accent-2);
+  --needs:var(--accent);
+  --up:#4fd08a;
+  --down:#ee5a5f;
+  --warn:#efc24a;
+
+  /* elevation */
+  --shadow:0 1px 3px rgba(0,0,0,.45);
+  --shadow-lg:0 40px 90px -50px rgba(0,0,0,.9);
+
+  /* shape */
+  --r-xs:6px; --r-sm:10px; --r-md:14px; --r-lg:20px;
+
+  /* metrics */
+  --nav-h:56px; --status-h:36px; --node-head:44px;
+
+  /* type */
+  --font:'Geist',system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei UI','Microsoft YaHei','Noto Sans SC',sans-serif;
+  --mono:'Geist Mono',ui-monospace,'SF Mono',Menlo,Consolas,'Liberation Mono',monospace;
+
+  /* depth */
+  --z-wires:1; --z-nodes:2; --z-sticky:40; --z-nav:60; --z-pop:70; --z-toast:80;
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{overflow-x:clip}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--page); color:var(--ink-2);
+  font-family:var(--font); font-size:14px; line-height:1.5;
+  font-feature-settings:"cv11" 1,"ss01" 1;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-xs)}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;left:12px;top:-60px;z-index:100;background:var(--accent);color:var(--on-accent);
+  padding:8px 14px;border-radius:var(--r-sm);font-weight:600;transition:top .15s}
+.skip:focus{top:12px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* bilingual: 中文为主，英文释义同字号跟在旁边。英文用灰阶弱一档，两种语言一眼能分开；
+   要改成高亮色只需把 .en 的 color 换成 var(--accent)。 */
+.en{color:var(--ink-3);font-size:inherit;font-weight:inherit}
+.en-dim{color:var(--ink-3)}
+.en-title{color:var(--ink-3);font-weight:400;font-size:17px}
+
+
+/* ─────────────────────────── shell ─────────────────────────── */
+.app{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh;overflow:hidden}
+
+.topbar{
+  height:var(--nav-h);display:flex;align-items:center;gap:14px;
+  padding:0 14px;border-bottom:1px solid var(--border);background:var(--bg);
+}
+.brand{display:flex;align-items:center;gap:9px;flex:0 0 auto}
+.brand-mark{width:24px;height:24px;border-radius:7px;background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;box-shadow:0 6px 18px -6px var(--glow)}
+.brand-mark svg{width:14px;height:14px}
+.crumbs{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0}
+.crumbs .sep{color:var(--ink-3);opacity:.7}
+.crumbs b{color:var(--ink-1);font-weight:600;white-space:nowrap}
+.crumbs span{color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-spacer{flex:1 1 auto;min-width:8px}
+
+.top-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 14px;
+  border-radius:var(--r-sm);font-size:13px;font-weight:600;white-space:nowrap;
+  border:1px solid transparent;transition:background .15s,border-color .15s,color .15s;
+}
+.btn svg{width:15px;height:15px;flex:0 0 auto}
+.btn-primary{background:var(--accent);color:var(--on-accent);box-shadow:0 8px 22px -12px var(--glow)}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-primary[aria-disabled="true"]{background:var(--panel-3);color:var(--ink-3);box-shadow:none;cursor:not-allowed}
+.btn-outline{border-color:var(--border-2);color:var(--ink-1);background:var(--panel-2)}
+.btn-outline:hover{border-color:var(--border-3);background:var(--panel-3)}
+.btn-ghost{color:var(--ink-2);padding:0 11px}
+.btn-ghost:hover{background:var(--panel-2);color:var(--ink-1)}
+
+.iconbtn{
+  width:34px;height:34px;border-radius:var(--r-sm);display:grid;place-items:center;
+  color:var(--ink-2);border:1px solid transparent;transition:background .15s,color .15s,border-color .15s;
+}
+.iconbtn:hover{background:var(--panel-2);color:var(--ink-1)}
+.iconbtn svg{width:16px;height:16px}
+.iconbtn.is-on{background:var(--accent-soft);color:var(--accent)}
+
+/* ─────────────────────────── main ─────────────────────────── */
+.shell{
+  display:grid;grid-template-columns:minmax(0,0.70fr) minmax(0,1.30fr);
+  gap:14px;padding:14px;min-height:0;
+}
+.col{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}
+
+.card{
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow);min-width:0;
+}
+
+/* ── stage (left: the artifact) ── */
+.stage-card{flex:0 0 auto;padding:12px;display:flex;flex-direction:column;gap:11px}
+.stage-head{display:flex;align-items:center;gap:10px;min-width:0}
+.stage-title{color:var(--ink-1);font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-model{color:var(--ink-3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.stage-head .grow{flex:1 1 auto;min-width:0;display:flex;align-items:baseline;gap:8px}
+
+.chip{
+  display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:var(--r-xs);
+  font-size:11px;font-weight:700;letter-spacing:.02em;flex:0 0 auto;
+}
+.chip-video{background:var(--accent);color:var(--on-accent)}
+.chip-image{background:var(--accent-soft-2);color:var(--accent)}
+.chip-audio{background:var(--accent-2-soft);color:var(--auto)}
+.chip-text{background:var(--panel-3);color:var(--ink-2)}
+.chip-queued{background:transparent;color:var(--ink-3);border:1px dashed var(--border-2)}
+
+.film-wrap{
+  position:relative;aspect-ratio:16/9;border-radius:var(--r-sm);overflow:hidden;
+  background:var(--page);cursor:pointer;
+}
+/* contain, not cover: a 3:4 still and a 16:9 clip both have to show whole */
+.film-media{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:contain;
+  background:var(--page);display:block;
+}
+.film-overlay{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding:10px}
+.film-overlay .row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+
+/* a text node gets paper instead of a player: same dot grid as the canvas, inverted.
+   `safe center` centres short prompts and top-aligns long ones, so an overlong
+   prompt scrolls from the top instead of being clipped at both ends. */
+.board{
+  position:absolute;inset:0;overflow:auto;display:flex;flex-direction:column;
+  justify-content:center;justify-content:safe center;padding:26px 34px;
+  background-color:var(--board);color:var(--board-ink);
+  background-image:radial-gradient(circle at 1px 1px,var(--board-dot) 1px,transparent 0);
+  background-size:22px 22px;
+}
+.board::-webkit-scrollbar{width:10px}
+.board::-webkit-scrollbar-thumb{background:rgba(36,31,26,.16);border-radius:10px;border:3px solid var(--board)}
+.board-inner{width:100%;max-width:620px;margin:0 auto;display:flex;flex-direction:column;gap:13px}
+.board-kicker{
+  font-family:var(--mono);font-size:11px;letter-spacing:.06em;line-height:1.3;
+  color:var(--board-ink-2);
+}
+.board-text{
+  margin:0;font-size:17px;line-height:1.78;letter-spacing:-.004em;
+  text-wrap:pretty;overflow-wrap:anywhere;
+}
+.board-en{margin:0;font-size:17px;line-height:1.68;letter-spacing:-.004em;color:var(--board-ink-2);text-wrap:pretty;overflow-wrap:anywhere;padding-top:11px;border-top:1px solid var(--board-dot)}
+
+.film-badge{
+  font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.08em;
+  color:rgba(255,255,255,.94);background:rgba(10,8,6,.42);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.16);border-radius:var(--r-xs);padding:3px 7px;white-space:nowrap;
+}
+.film-note{
+  font-family:var(--mono);font-size:10.5px;color:rgba(255,255,255,.86);
+  background:rgba(10,8,6,.42);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.14);
+  border-radius:var(--r-xs);padding:3px 7px;white-space:nowrap;
+}
+.film-empty{
+  position:absolute;inset:14px;border:1px dashed var(--border-2);border-radius:var(--r-sm);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  color:var(--ink-3);font-size:12.5px;padding:16px;
+}
+.film-empty svg{width:22px;height:22px;color:var(--ink-3)}
+.film-empty b{color:var(--ink-2);font-weight:600}
+
+.transport{display:flex;align-items:center;gap:10px}
+.transport .tc{font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.transport .tc span{color:var(--ink-3)}
+.playbtn{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;
+  background:var(--panel-3);color:var(--ink-1);border:1px solid var(--border);transition:background .15s,color .15s;
+}
+.playbtn:hover{background:var(--accent);color:var(--on-accent);border-color:transparent}
+.playbtn svg{width:14px;height:14px;margin-left:1px}
+.playbtn.is-playing svg{margin-left:0}
+.scrub{
+  -webkit-appearance:none;appearance:none;flex:1 1 auto;min-width:60px;height:22px;background:transparent;cursor:pointer;
+}
+.scrub:disabled{cursor:not-allowed;opacity:.45}
+.scrub::-webkit-slider-runnable-track{
+  height:4px;border-radius:2px;
+  background:linear-gradient(90deg,var(--accent) var(--fill,0%),var(--border-2) var(--fill,0%));
+}
+.scrub::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:12px;border-radius:50%;margin-top:-4px;background:var(--ink-1);
+  box-shadow:0 0 0 0 var(--accent-soft);transition:box-shadow .15s;
+}
+.scrub:hover::-webkit-slider-thumb,.scrub:focus-visible::-webkit-slider-thumb{box-shadow:0 0 0 5px var(--accent-soft)}
+.scrub::-moz-range-track{height:4px;border-radius:2px;background:var(--border-2)}
+.scrub::-moz-range-progress{height:4px;border-radius:2px;background:var(--accent)}
+.scrub::-moz-range-thumb{width:12px;height:12px;border:0;border-radius:50%;background:var(--ink-1)}
+
+/* facts card */
+.facts{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.facts-scroll{flex:1 1 auto;overflow-y:auto;min-height:0;padding:14px;display:flex;flex-direction:column;gap:14px}
+.facts-scroll::-webkit-scrollbar{width:9px}
+.facts-scroll::-webkit-scrollbar-thumb{background:var(--panel-3);border-radius:9px;border:3px solid var(--bg)}
+
+.section-label{
+  font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1.25;
+  color:var(--ink-3);margin:0 0 7px;
+}
+.prompt-text{
+  margin:0;color:var(--ink-1);font-size:13.5px;line-height:1.6;text-wrap:pretty;
+  background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:11px 12px;
+}
+.prompt-en{
+  margin:0;color:var(--ink-2);font-size:13.5px;line-height:1.6;text-wrap:pretty;
+  border-top:1px solid var(--border);padding-top:9px;
+}
+.prov{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;font-size:12px;color:var(--ink-3)}
+.linkbtn{
+  display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:var(--r-xs);
+  background:var(--panel-2);border:1px solid var(--border);color:var(--ink-1);font-size:12px;font-weight:500;
+  transition:border-color .15s,background .15s;max-width:100%;
+}
+.linkbtn:hover{border-color:var(--accent);background:var(--accent-soft)}
+.linkbtn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.linkbtn svg{width:13px;height:13px;color:var(--accent);flex:0 0 auto}
+
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden}
+.kv div{background:var(--panel-2);padding:9px 11px;min-width:0}
+.kv dt{font-size:11px;color:var(--ink-3);margin:0 0 3px}
+.kv dd{margin:0;font-family:var(--mono);font-size:12.5px;color:var(--ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── canvas (right: the flow) ── */
+.canvas-card{flex:1 1 auto;min-height:0;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.canvas-bar{
+  display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;
+}
+.seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;gap:2px}
+.seg button{
+  width:30px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--ink-3);transition:background .15s,color .15s;
+}
+.seg button[aria-pressed="true"]{background:var(--panel-3);color:var(--ink-1)}
+.seg button:hover{color:var(--ink-1)}
+.seg svg{width:15px;height:15px}
+.canvas-bar .spacer{flex:1 1 auto;min-width:6px}
+.zoomctl{display:inline-flex;align-items:center;gap:2px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px}
+.zoomctl button{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--ink-3)}
+.zoomctl button:hover{background:var(--panel-3);color:var(--ink-1)}
+.zoomctl button svg{width:14px;height:14px}
+.zoomctl .pct{min-width:48px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+.jump{display:inline-flex;align-items:center;gap:2px;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:2px;flex:0 0 auto}
+.jump button{height:28px;padding:0 11px;border-radius:7px;font-size:11.5px;font-weight:600;color:var(--ink-3);white-space:nowrap;transition:background .15s,color .15s}
+.jump button[aria-pressed="true"]{background:var(--panel-3);color:var(--ink-1)}
+.jump button:hover{color:var(--ink-1)}
+.jump .short{display:none}
+
+.viewport{
+  position:relative;flex:1 1 auto;min-height:0;overflow:hidden;cursor:grab;
+  background-color:var(--page);
+  background-image:radial-gradient(circle at 1px 1px, rgba(255,255,255,.075) 1px, transparent 0);
+  background-size:26px 26px;
+  touch-action:none;
+}
+.viewport.is-panning{cursor:grabbing}
+.viewport::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(130% 100% at 50% 45%, transparent 62%, rgba(0,0,0,.34) 100%);
+}
+.graph{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;will-change:transform}
+
+/* one dashed frame per example, its label sitting on the top border */
+.frame{
+  position:absolute;left:var(--x);top:var(--y);width:var(--w);height:var(--h);
+  z-index:0;pointer-events:none;border:1px dashed var(--border-2);border-radius:22px;
+}
+.frame-label{
+  position:absolute;left:22px;top:-9px;padding:0 10px;background-color:var(--page);
+  color:var(--ink-2);font-size:11.5px;font-weight:600;letter-spacing:.02em;white-space:nowrap;
+}
+.wires{position:absolute;left:0;top:0;overflow:visible;z-index:var(--z-wires);pointer-events:none}
+.wires path{fill:none;stroke:var(--wire);stroke-width:1.6;stroke-linecap:round;transition:stroke .18s,opacity .18s}
+.wires path.dim{stroke:var(--wire-dim);opacity:.7}
+.wires path.lit{stroke:var(--wire-lit)}
+
+/* node */
+.node{position:absolute;left:var(--x);top:var(--y);width:var(--w);height:var(--h);z-index:var(--z-nodes);
+  display:flex;flex-direction:column;min-width:0}
+.node-head{height:var(--node-head);display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;padding-right:4px}
+.node-title{color:var(--ink-1);font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.node-title .en{font-weight:400}
+.node-model{color:var(--ink-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.node.is-selected .node-title{color:var(--accent)}
+.node.is-queued .node-title{color:var(--ink-3)}
+
+.node-card{
+  position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--r-md);
+  box-shadow:var(--shadow);transition:border-color .18s,box-shadow .18s,background .18s;
+}
+.node:hover .node-card{border-color:var(--border-2);background:var(--panel-2)}
+.node.is-selected .node-card{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 14px 34px -22px var(--glow)}
+.node:focus-within .node-card{border-color:var(--accent)}
+.node.is-queued .node-card{background:transparent;border-style:dashed;border-color:var(--border-2);box-shadow:none}
+.node.is-running .node-card{border-color:var(--accent-soft-2)}
+
+.node-hit{position:absolute;inset:0;z-index:1;border-radius:inherit;background:transparent}
+.node-hit:focus-visible{outline:none}
+.node-hit:focus-visible::after{content:"";position:absolute;inset:-3px;border-radius:calc(var(--r-md) + 3px);
+  border:2px solid var(--accent);pointer-events:none}
+
+.port{position:absolute;width:12px;height:12px;top:16px;border-radius:50%;z-index:3;pointer-events:none;
+  background:var(--page);border:2px solid var(--accent);transition:border-color .18s,box-shadow .18s}
+.port::after{content:"";position:absolute;inset:2px;border-radius:50%;background:var(--accent);opacity:.9}
+.port-in{left:-6px}
+.port-out{right:-6px}
+.node.is-queued .port{border-color:var(--border-3)}
+.node.is-queued .port::after{background:var(--border-3)}
+.node.dim-node .port{border-color:var(--border-2)}
+.node.dim-node .port::after{background:var(--border-2)}
+
+.node-bar{display:flex;align-items:center;gap:7px;min-width:0;position:relative;z-index:2;pointer-events:none}
+.node-bar .grow{flex:1 1 auto;min-width:0}
+.node-flag{pointer-events:none}
+.node-stat{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.node-media{position:relative;flex:1 1 auto;min-height:0;border-radius:var(--r-xs);overflow:hidden;background:var(--panel-2)}
+.node-media img,.node-media video{display:block;width:100%;height:100%;object-fit:cover}
+.node-media.is-text{
+  display:flex;align-items:center;padding:10px;overflow:hidden;
+  font-size:11.5px;line-height:1.55;color:var(--ink-2);
+  background:var(--panel-2);border:1px solid var(--border);
+}
+.node-media.is-empty{display:grid;place-items:center;background:transparent;border:1px dashed var(--border-2);
+  color:var(--ink-3);font-size:11px;text-align:center;padding:8px}
+.node-media .veil{position:absolute;inset:0;background:rgba(19,18,17,.5)}
+.node-media .scan{
+  position:absolute;left:0;right:0;height:34%;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(255,122,60,.16),transparent);
+  animation:scan 2.6s cubic-bezier(.4,0,.6,1) infinite;
+}
+@keyframes scan{0%{transform:translateY(-120%)}100%{transform:translateY(320%)}}
+.node-media .centermark{position:absolute;inset:0;display:grid;place-items:center}
+.spinner{width:20px;height:20px;border-radius:50%;border:2px solid var(--accent-soft-2);border-top-color:var(--accent);
+  animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(1turn)}}
+
+.node-foot{display:flex;align-items:center;gap:8px;position:relative;z-index:2;min-width:0;pointer-events:none}
+.progress{flex:1 1 auto;height:4px;border-radius:2px;background:var(--border);overflow:hidden;min-width:0}
+.progress i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width .4s linear}
+.node-foot .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap}
+.node-flag{
+  position:relative;z-index:2;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;
+  color:var(--warn);background:rgba(239,194,74,.12);border-radius:var(--r-xs);padding:2px 7px;
+}
+.node-flag svg{width:12px;height:12px}
+.qbadge{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);border:1px solid var(--border-2);
+  border-radius:var(--r-xs);padding:1px 6px;white-space:nowrap}
+
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.28}}
+
+/* minimap + legend */
+.minimap{
+  position:absolute;left:12px;bottom:12px;width:176px;height:112px;z-index:var(--z-sticky);
+  background:rgba(19,18,17,.86);backdrop-filter:blur(8px);border:1px solid var(--border-2);
+  border-radius:var(--r-sm);overflow:hidden;cursor:crosshair;
+}
+.minimap i{position:absolute;border-radius:2px;background:var(--border-2)}
+.minimap i.on{background:var(--accent)}
+.minimap .vp{position:absolute;border:1px solid var(--accent);background:var(--accent-ghost);border-radius:3px}
+.legend{
+  position:absolute;right:12px;bottom:12px;z-index:var(--z-sticky);display:flex;flex-direction:column;gap:6px;
+  background:rgba(19,18,17,.86);backdrop-filter:blur(8px);border:1px solid var(--border-2);
+  border-radius:var(--r-sm);padding:9px 11px;font-size:11px;color:var(--ink-3);
+}
+.legend div{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.legend .k{width:9px;height:9px;border-radius:50%;border:2px solid var(--border-2);background:transparent;flex:0 0 auto}
+.legend .k-on{background:var(--accent);border-color:var(--accent)}
+.legend .k-run{border-color:var(--accent);border-style:dashed}
+.legend .k-part{border-color:var(--warn);border-style:dotted}
+.legend .k-text{border-radius:2px;background:var(--panel-3);border-width:1px;border-color:var(--border-3)}
+
+/* ── status bar ── */
+.statusbar{
+  height:var(--status-h);display:flex;align-items:center;gap:14px;padding:0 14px;
+  border-top:1px solid var(--border);background:var(--bg);font-size:12px;color:var(--ink-3);
+}
+.statusbar .seg-live{display:flex;align-items:center;gap:9px;min-width:0;color:var(--ink-2);white-space:nowrap}
+.statusbar .seg-live b{color:var(--accent);font-weight:600;white-space:nowrap;flex:0 0 auto}
+.statusbar .seg-live .live-run::before,
+.statusbar .seg-live .live-node::before,
+.statusbar .seg-live .live-step::before{content:"·";color:var(--ink-3);margin-right:9px}
+.statusbar .seg-live .live-run,
+.statusbar .seg-live .live-node,
+.statusbar .seg-live .live-step{overflow:hidden;text-overflow:ellipsis;min-width:0}
+.statusbar .seg-live .live-run{color:var(--ink-3);flex:0 0 auto}
+.statusbar .spacer{flex:1 1 auto}
+.logbtn{
+  display:inline-flex;align-items:center;gap:7px;height:24px;padding:0 9px;border-radius:var(--r-xs);
+  border:1px solid var(--border);background:var(--panel-2);color:var(--ink-2);font-size:11.5px;font-weight:500;
+}
+.logbtn:hover{border-color:var(--border-3);color:var(--ink-1)}
+.logbtn svg{width:13px;height:13px}
+.demo-tag{
+  font-family:var(--mono);font-size:10.5px;color:var(--ink-3);border:1px solid var(--border);
+  border-radius:var(--r-xs);padding:1px 6px;white-space:nowrap;
+}
+
+/* ── run log popover ── */
+.pop{
+  position:absolute;z-index:var(--z-pop);width:min(430px,calc(100vw - 24px));
+  background:var(--bg);border:1px solid var(--border-2);border-radius:var(--r-md);
+  box-shadow:var(--shadow-lg);overflow:hidden;opacity:0;transform:translateY(6px);pointer-events:none;
+  transition:opacity .16s,transform .16s;
+}
+.pop[data-open="true"]{opacity:1;transform:none;pointer-events:auto}
+.pop-head{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--border)}
+.pop-head b{color:var(--ink-1);font-size:13px;font-weight:600}
+.pop-head .spacer{flex:1 1 auto}
+.pop-body{max-height:328px;overflow-y:auto;padding:5px}
+.pop-body::-webkit-scrollbar{width:9px}
+.pop-body::-webkit-scrollbar-thumb{background:var(--panel-3);border-radius:9px;border:3px solid var(--bg)}
+.row-step{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:10px;
+  padding:8px 9px;border-radius:var(--r-xs);width:100%;text-align:left}
+.row-step:hover{background:var(--panel-2)}
+.row-step .ico{width:16px;height:16px;display:grid;place-items:center;color:var(--auto)}
+.row-step .ico svg{width:14px;height:14px}
+.row-step .lbl{min-width:0}
+.row-step .lbl b{display:block;color:var(--ink-1);font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-step .lbl span{display:block;font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row-step .d{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.row-step.is-run .ico{color:var(--accent)}
+.row-step.is-part .ico{color:var(--warn)}
+.row-step.is-part .d{color:var(--warn)}
+.evidence{margin:2px 9px 8px 35px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--panel-2);padding:9px 10px}
+.evidence div{display:flex;gap:10px;font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--ink-2)}
+.evidence div span:first-child{color:var(--ink-3);width:42px;flex:0 0 auto}
+.evidence div span:last-child{overflow-wrap:anywhere}
+.pop-foot{display:flex;align-items:center;gap:8px;padding:10px 13px;border-top:1px solid var(--border);color:var(--ink-3);font-size:11.5px}
+.pop-foot .spacer{flex:1 1 auto}
+
+/* toast */
+.toasts{position:fixed;left:50%;bottom:calc(var(--status-h) + 16px);transform:translateX(-50%);
+  z-index:var(--z-toast);display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{
+  display:flex;align-items:center;gap:9px;background:var(--panel-3);border:1px solid var(--border-2);
+  border-radius:999px;padding:9px 15px;font-size:12.5px;color:var(--ink-1);box-shadow:var(--shadow-lg);
+  animation:toastin .22s cubic-bezier(.16,1,.3,1) both;max-width:min(420px,calc(100vw - 32px));
+}
+.toast svg{width:14px;height:14px;color:var(--accent);flex:0 0 auto}
+.toast.out{animation:toastout .2s ease-in both}
+@keyframes toastin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes toastout{to{opacity:0;transform:translateY(6px)}}
+
+/* ─────────────────────────── responsive ─────────────────────────── */
+@media (max-width:1100px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  /* on one column the flow canvas would otherwise sit below a tall spec sheet */
+  .col{display:contents}
+  .stage-card{order:1}
+  .canvas-card{order:2;min-height:560px}
+  .facts{order:3}
+}
+@media (max-width:900px){
+  .app{height:auto;min-height:100dvh;overflow:visible}
+  .topbar{position:sticky;top:0;z-index:var(--z-nav)}
+  .shell{overflow:visible}
+  .facts{overflow:visible}
+  .facts-scroll{overflow:visible}
+}
+@media (max-width:760px){
+  /* the status bar is the widest fixed row on the page: let it break into two lines
+     instead of forcing the whole document wider than the viewport */
+  .statusbar{height:auto;min-height:var(--status-h);flex-wrap:wrap;row-gap:7px;padding:8px 14px}
+  .statusbar .seg-live{flex:1 1 100%;min-width:0}
+  .statusbar .seg-live b{overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .statusbar .spacer{display:none}
+  .canvas-bar .chip{display:none}
+  .jump button{padding:0 9px}
+}
+@media (max-width:520px){
+  .jump .full{display:none}
+  .jump .short{display:inline}
+}
+
+@media (max-width:720px){
+  .crumbs span,.demo-tag{display:none}
+  .brand-mark{display:none}
+  .btn-ghost{display:none}
+  .legend{display:none}
+  .statusbar{gap:10px}
+  .seg-live .live-node{display:none}
+  .zoomctl .pct{min-width:42px}
+}
+@media (max-width:520px){
+  .seg-live .live-step{display:none}
+}
+/* a 16:9 board on a phone is short: drop the type a step so a normal prompt fits
+   without scrolling, and let anything longer scroll from the top */
+@media (max-width:430px){
+  .board{padding:16px 18px}
+  .board-text{font-size:14.5px;line-height:1.72}
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  .scan{display:none}
+  /* a frozen spinner reads as "stuck"; the state is carried by words + elapsed time instead */
+  .centermark .spinner{display:none}
+  .centermark::after{content:"生成中";font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--accent)}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#stage">跳到播放器</a>
+
+<div class="app">
+
+  <!-- ══════════════ topbar ══════════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+          <path d="M5 19V7m0 0 7 7 7-7v12"/>
+        </svg>
+      </span>
+      <nav class="crumbs" aria-label="项目路径">
+        <b>AI 视频生成流程</b>
+        <span class="sep" aria-hidden="true">/</span>
+        <span>2 个示例 · 9 个节点 <span class="en">2 Examples · 9 Nodes</span></span>
+      </nav>
+    </div>
+
+    <span class="topbar-spacer"></span>
+
+    <div class="top-actions">
+      <button class="btn btn-primary" id="stopBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+        停止 <span class="en">Stop</span>
+      </button>
+      <button class="btn btn-outline" id="exportBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+        导出 <span class="en">Export</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════ main ══════════════ -->
+  <main class="shell">
+
+    <!-- ── LEFT: stage ── -->
+    <div class="col">
+      <section class="card stage-card" id="stage" aria-label="节点产物播放器">
+        <div class="stage-head">
+          <span class="grow">
+            <span class="chip chip-video" id="stageChip">视频 <span class="en">Video</span></span>
+            <span class="stage-title" id="stageTitle">视频 A · 面部特写 <span class="en">Video A · Close-up</span></span>
+            <span class="stage-model" id="stageModel">Seedance 2.5</span>          </span>
+          <button class="iconbtn" id="fullBtn" type="button" aria-label="全屏播放">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+        </div>
+
+        <div class="film-wrap" id="filmWrap">
+          <video id="filmVid" class="film-media" muted playsinline preload="metadata" aria-label="正在播放的生成结果" hidden></video>
+          <img id="filmImg" class="film-media" alt="" hidden>
+          <div class="board" id="board" hidden>
+            <div class="board-inner">
+              <span class="board-kicker" id="boardKicker">提示词 Prompt · 初始版本</span>
+              <p class="board-text" id="boardZh"></p>
+              <p class="board-text board-en" id="boardEn"></p>
+            </div>
+          </div>
+          <div class="film-overlay" aria-hidden="true">
+            <div class="row">
+              <span class="film-badge" id="filmBadge">TAKE A</span>
+              <span class="film-note" id="filmNote">15.07s · 1280 × 720 · 16:9</span>
+            </div>
+            <div class="row"></div>
+          </div>
+          <div class="film-empty" id="filmEmpty" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v5l3 2"/></svg>
+            <span><b id="emptyTitle">等待上游</b><br><span id="emptySub">上游节点生成中</span></span>
+          </div>
+        </div>
+
+        <div class="transport">
+          <button class="playbtn" id="playBtn" type="button" aria-label="播放">
+            <svg id="playIcon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5l12 7.5-12 7.5z"/></svg>
+          </button>
+          <span class="tc"><span id="tcNow">00:00.00</span> / <span id="tcDur">00:15.00</span></span>
+          <input class="scrub" id="scrub" type="range" min="0" max="1000" value="0" step="1" aria-label="播放进度">
+          <button class="iconbtn" id="muteBtn" type="button" aria-label="静音切换" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 10v4h3l4 3V7L8 10H5z"/><path d="M16 9.5c1.2 1.2 1.2 3.8 0 5"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <section class="card facts" aria-label="当前节点参数">
+        <div class="facts-scroll">
+          <div>
+            <h2 class="section-label">提示词 <span class="en">Prompt</span></h2>
+            <p class="prompt-text" id="promptZh"></p>
+            <p class="prompt-text prompt-en" id="promptEn"></p>
+            <div class="prov" id="prov"></div>
+          </div>
+
+          <div>
+            <h2 class="section-label">生成参数 <span class="en">Parameters</span></h2>
+            <dl class="kv" id="kvBox"></dl>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── RIGHT: canvas ── -->
+    <section class="card canvas-card" aria-label="生成流程画布">
+      <div class="canvas-bar">
+        <div class="seg" role="group" aria-label="画布工具">
+          <button type="button" aria-pressed="true" aria-label="选择工具" title="选择 (V)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l12 8-5 1.6L11 18 6 3z"/></svg>
+          </button>
+          <button type="button" aria-pressed="false" aria-label="抓手工具" title="抓手 (H)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5v-3a1.5 1.5 0 0 1 3 0V11m0-1v-2a1.5 1.5 0 0 1 3 0v6.5A5.5 5.5 0 0 1 12.5 20h-1A5.5 5.5 0 0 1 6 14.5V12a1.5 1.5 0 0 1 3 0"/></svg>
+          </button>
+        </div>
+        <div class="jump" role="group" aria-label="跳到示例">
+          <button type="button" id="jumpA" aria-pressed="true"><span class="full">示例 A <span class="en">Example A</span></span><span class="short">A</span></button>
+          <button type="button" id="jumpB" aria-pressed="false"><span class="full">示例 B <span class="en">Example B</span></span><span class="short">B</span></button>
+        </div>
+        <span class="spacer"></span>
+        <span class="chip chip-text">9 个节点 · 7 条连线 <span class="en">9 Nodes · 7 Links</span></span>
+        <span class="spacer"></span>
+        <div class="zoomctl">
+          <button type="button" id="zoomOut" aria-label="缩小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+          <span class="pct" id="zoomPct">90%</span>
+          <button type="button" id="zoomIn" aria-label="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>
+          <button type="button" id="zoomFit" aria-label="适应视图" title="适应视图">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="viewport" id="viewport">
+        <div class="graph" id="graph">
+          <div id="frames"></div>
+          <svg class="wires" id="wires" width="1250" height="1750" viewBox="0 0 1250 1750" aria-hidden="true"></svg>
+          <div id="nodes"></div>
+        </div>
+
+        <div class="minimap" id="minimap" role="button" tabindex="0" aria-label="缩略图导航"></div>
+
+        <div class="legend" aria-hidden="true">
+          <div><i class="k k-on"></i>当前查看 <span class="en">Selected</span></div>
+          <div><i class="k k-run"></i>生成中 <span class="en">Generating</span></div>
+          <div><i class="k k-part"></i>部分完成 <span class="en">Partial</span></div>
+          <div><i class="k k-text"></i>文本节点 <span class="en">Text node</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ══════════════ status bar ══════════════
+       the whole run speaks from one line: state, which step, how long. It used to be
+       split across a topbar chip, a topbar receipt and a budget meter, which said the
+       same thing three times in three places. -->
+  <footer class="statusbar">
+    <span class="seg-live">
+      <span class="pulse" aria-hidden="true"></span>
+      <b id="liveState">生成中 <span class="en">Generating</span></b>
+      <span class="live-run" id="liveRun">示例 A <span class="en">Example A</span></span>
+      <span class="live-node" id="liveNode">视频 B · 半身走位 <span class="en">Video B · Medium Shot</span></span>
+      <span class="live-step mono" id="liveStep">第 5/5 步 · 已运行 48s <span class="en">Step 5/5 · 48s</span></span>
+    </span>
+
+    <span class="spacer"></span>
+
+    <span class="demo-tag">仅供浏览 · 示例数据 <span class="en">View-only · Sample data</span></span>
+  </footer>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ═══════════════════════════ 0 · probes ═══════════════════════════ */
+const RM   = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const FINE = matchMedia('(hover:hover) and (pointer:fine)').matches;
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+/* bilingual helper: 中文为主，英文释义同字号跟在旁边。passing an explicit en overrides
+   the dictionary lookup, so node titles get a hand-tuned professional term. */
+const ZH_EN = {
+  '提示词':'Prompt', '图像':'Image', '视频':'Video', '文本':'Text',
+  '生成中':'Generating', '运行记录':'Run log', '停止':'Stop', '导出':'Export',
+  '生成参数':'Parameters', '上游':'From', '类型':'Type', '版本':'Version', '下游':'Downstream',
+  '分辨率':'Resolution', '比例':'Aspect', '风格':'Style', '角色':'Character', '时长':'Duration',
+  '景别':'Shot', '运镜':'Camera', '音轨':'Audio', '当前查看':'Selected', '文本节点':'Text node',
+  '示例 A':'Example A', '示例 B':'Example B', '仅供浏览 · 示例数据':'View-only · Sample data',
+  '入参':'Input', '出参':'Output', '耗时':'Duration', '重绘的':'Redrawn',
+  '从部分完成的步骤重试':'Retry from the partial step', '无时间轴':'No timeline', '静帧':'Still',
+  '排队':'Queued', '部分完成':'Partial', '已完成':'Done'
+};
+function bi(zh, en){ return '<span class="zh">' + zh + '</span> <span class="en">' + (en || ZH_EN[zh] || '') + '</span>'; }
+
+/* ═══════════════════════════ 1 · node model ═══════════════════════════
+   Two example runs live on one canvas, each inside its own frame:
+
+     示例 A   提示词(初始版本) → 图像【初始人物】 → 图像【初始人物 老年化】 ─┬→ 视频 A · 面部特写
+                                                                          └→ 视频 B · 半身走位
+     示例 B   提示词(初始版本) → 图像【初始人物】 ─┬→ 视频 A · 全景镜头
+                                                  └→ 视频 B · 特写镜头
+
+   Every node carries a real artefact under assets/; the canvas is the flow, the
+   player on the left is whatever node you have selected. */
+const HEAD = 44, PORT_DY = 22;   /* node-head height (bilingual two-line) · port centre below the card top */
+
+const NODES = [
+  /* ─────────── 示例 A · 人物老年化 ─────────── */
+  {
+    id:'a-prompt', run:'A', kind:'text', chip:'文本', chipCls:'chip-text',
+    title:'提示词', en:'Prompt', model:'Deepseek-V4-Pro', x:20, y:296, w:216, h:210, status:'done', take:'TEXT',
+    prompt:'将图中人物变为70岁老年形象，头发花白，脸上布满皱纹，但面部特征与原图保持一致。他身穿一件舒适的藏式便装，坐在温暖的室内，背景是模糊的家居环境。保持原图的部分上色艺术风格。',
+    prompt_en:'Age the person in the image to 70: graying hair and a face lined with wrinkles, while keeping the facial features consistent with the original. He wears a comfortable Tibetan-style casual outfit, seated in a warm interior against a blurred home setting. Keep the partial-color art style of the original.',
+    params:[['类型','Type','文本节点','Text node'],['版本','Version','初始版本','Initial version'],['下游','Downstream','1 条','1']],
+    time:'2.0s', tok:'0', cost:'¥0.00', dur:0
+  },
+  {
+    id:'a-img1', run:'A', kind:'image', chip:'图像', chipCls:'chip-image',
+    title:'初始人物', en:'Initial Character', model:'Seedream 5.0 Pro', x:304, y:296, w:218, h:357, status:'done',
+    src:'assets/a-kf-01-initial.jpg', take:'IMG 01',
+    alt:'水彩风格的年轻登山者，红色冲锋衣，雪山背景',
+    prompt:'将图中人物变为70岁老年形象，头发花白，脸上布满皱纹，但面部特征与原图保持一致。保持原图的部分上色艺术风格。',
+    prompt_en:'Age the person in the image to 70: graying hair and a face lined with wrinkles, while keeping the facial features consistent with the original. Keep the partial-color art style of the original.',
+    params:[['分辨率','Resolution','1728 × 2304'],['比例','Aspect','3:4'],['风格','Style','水彩 · 部分上色','Watercolor · partial color'],['角色','Character','初始人物','Initial character']],
+    time:'1m04s', tok:'2.4k', cost:'¥0.52', dur:0, from:['a-prompt']
+  },
+  {
+    id:'a-img2', run:'A', kind:'image', chip:'图像', chipCls:'chip-image',
+    title:'初始人物 · 老年化', en:'Aged Version', model:'Seedream 5.0 Pro', x:590, y:296, w:218, h:357, status:'partial',
+    src:'assets/a-kf-02-aged.jpg', take:'IMG 02',
+    alt:'同一位人物的老年化版本，藏式便装，温暖室内',
+    prompt:'将图中人物变为70岁老年形象，头发花白，脸上布满皱纹，但面部特征与原图保持一致。他身穿一件舒适的藏式便装，坐在温暖的室内，背景是模糊的家居环境。保持原图的部分上色艺术风格。',
+    prompt_en:'Age the person in the image to 70: graying hair and a face lined with wrinkles, while keeping the facial features consistent with the original. He wears a comfortable Tibetan-style casual outfit, seated in a warm interior against a blurred home setting. Keep the partial-color art style of the original.',
+    params:[['分辨率','Resolution','1728 × 2304'],['比例','Aspect','3:4'],['风格','Style','水彩 · 部分上色','Watercolor · partial color'],['角色','Character','70 岁版本','Age-70 version']],
+    time:'1m18s', tok:'3.1k', cost:'¥0.61', dur:0, from:['a-img1'], flag:'1 帧重绘', flag_en:'1 frame redrawn'
+  },
+  {
+    id:'a-vidA', run:'A', kind:'video', chip:'视频', chipCls:'chip-video',
+    title:'视频 A · 面部特写', en:'Video A · Close-up', model:'Seedance 2.5', x:876, y:116, w:268, h:236, status:'done',
+    src:'assets/a-take-face.mp4', take:'TAKE A', dur:10.02,
+    prompt:'老年化人物面部特写，镜头保持不动，只有表情与光线的细微变化。',
+    prompt_en:'Close-up of the aged character; the camera holds still as expression and light shift subtly.',
+    params:[['时长','Duration','10.02s'],['分辨率','Resolution','1920 × 1088'],['比例','Aspect','16:9'],['景别','Shot','面部特写','Close-up'],['运镜','Camera','固定机位','Locked-off'],['音轨','Audio','静音','Muted']],
+    time:'1m52s', tok:'5.2k', cost:'¥1.22', from:['a-img2']
+  },
+  {
+    id:'a-vidB', run:'A', kind:'video', chip:'视频', chipCls:'chip-video',
+    title:'视频 B · 半身走位', en:'Video B · Medium Shot', model:'Seedance 2.5', x:876, y:476, w:268, h:236, status:'running',
+    src:'assets/a-take-halfbody.mp4', take:'TAKE B', dur:10.02, progress:0.34, elapsed:'48s',
+    prompt:'老年化人物半身景别，轻微呼吸起伏与视线变化，环境光保持不变。',
+    prompt_en:'Medium shot of the aged character; gentle breathing and a slow shift of gaze against an unchanging ambient light.',
+    params:[['时长','Duration','10.02s'],['分辨率','Resolution','1920 × 1088'],['比例','Aspect','16:9'],['景别','Shot','半身','Medium shot'],['运镜','Camera','固定机位','Locked-off'],['音轨','Audio','静音','Muted']],
+    time:'48s', tok:'1.9k', cost:'¥0.48', from:['a-img2']
+  },
+
+  /* ─────────── 示例 B · 登山队员 ─────────── */
+  {
+    id:'b-prompt', run:'B', kind:'text', chip:'文本', chipCls:'chip-text',
+    title:'提示词', en:'Prompt', model:'Deepseek-V4-Pro', x:57, y:1162, w:216, h:210, status:'done', take:'TEXT',
+    prompt:'特写登山队员戴着氧气面罩，面罩内烟雾弥漫凝结成白霜，队员眼睛微闭表情痛苦，面罩玻璃上结满霜花，光线昏暗，纪实摄影风格，冷色调，4K画质。',
+    prompt_en:'Close-up of a mountaineer wearing an oxygen mask, breath fogging the visor into frost, eyes half-closed in pain, the glass crusted with frost, dim light, documentary photography style, cool tones, 4K.',
+    params:[['类型','Type','文本节点','Text node'],['版本','Version','初始版本','Initial version'],['下游','Downstream','2 条','2']],
+    time:'2.0s', tok:'0', cost:'¥0.00', dur:0
+  },
+  {
+    id:'b-img1', run:'B', kind:'image', chip:'图像', chipCls:'chip-image',
+    title:'初始人物', en:'Initial Character', model:'Seedream 5.0 Pro', x:437, y:1162, w:228, h:304, status:'partial',
+    src:'assets/b-kf-01-initial.jpg', take:'IMG 01',
+    alt:'戴着氧气面罩的登山队员，面罩玻璃结满霜花，冷色调纪实摄影风格',
+    prompt:'特写登山队员戴着氧气面罩，面罩内烟雾弥漫凝结成白霜，队员眼睛微闭表情痛苦，面罩玻璃上结满霜花，光线昏暗，纪实摄影风格，冷色调，4K画质。',
+    prompt_en:'Close-up of a mountaineer wearing an oxygen mask, breath fogging the visor into frost, eyes half-closed in pain, the glass crusted with frost, dim light, documentary photography style, cool tones, 4K.',
+    params:[['分辨率','Resolution','5792 × 5792'],['比例','Aspect','1:1'],['风格','Style','纪实摄影 · 冷色调','Documentary · cool tone'],['角色','Character','初始人物','Initial character']],
+    time:'1m04s', tok:'3.1k', cost:'¥0.61', dur:0, from:['b-prompt'], flag:'1 帧重绘', flag_en:'1 frame redrawn'
+  },
+  {
+    id:'b-vidA', run:'B', kind:'video', chip:'视频', chipCls:'chip-video',
+    title:'视频 A · 全景镜头', en:'Video A · Wide Shot', model:'Seedance 2.5', x:827, y:992, w:280, h:242, status:'done',
+    src:'assets/b-take-wide.mp4', take:'TAKE A', dur:15.07,
+    prompt:'由初始人物延展的全景镜头：登山队员立于风雪山脊，广角收下整片山体。',
+    prompt_en:'A wide shot extended from the initial character: the mountaineer stands on a snowy ridge, the whole massif held in a wide frame.',
+    params:[['时长','Duration','15.07s'],['分辨率','Resolution','1280 × 720'],['比例','Aspect','16:9'],['景别','Shot','全景','Wide'],['运镜','Camera','固定机位','Locked-off'],['音轨','Audio','静音','Muted']],
+    time:'1m52s', tok:'5.2k', cost:'¥1.22', from:['b-img1']
+  },
+  {
+    id:'b-vidB', run:'B', kind:'video', chip:'视频', chipCls:'chip-video',
+    title:'视频 B · 特写镜头', en:'Video B · Close-up', model:'Seedance 2.5', x:827, y:1332, w:280, h:356, status:'running',
+    src:'assets/b-take-close.mp4', take:'TAKE B', dur:15.07, progress:0.34, elapsed:'48s',
+    prompt:'由初始人物延展的特写镜头：氧气面罩与霜花占满画面，呼吸起伏可见。',
+    prompt_en:'A close-up extended from the initial character: the oxygen mask and frost fill the frame, breathing barely visible.',
+    params:[['时长','Duration','15.07s'],['分辨率','Resolution','960 × 960'],['比例','Aspect','1:1'],['景别','Shot','特写','Close-up'],['运镜','Camera','固定机位','Locked-off'],['音轨','Audio','静音','Muted']],
+    time:'48s', tok:'1.9k', cost:'¥0.48', from:['b-img1']
+  }
+];
+
+/* ═══════════════════════════ 2 · the two runs ═══════════════════════════
+   The footer and the run log describe whichever run you are looking at, so the
+   page never claims to be generating something you are not looking at. */
+const RUNS = {
+  A: {
+    key: 'A',
+    label: '示例 A', en:'Example A',
+    name: '人物老年化', name_en:'Character Aging',
+    runId: 'Run #1842',
+    liveNode: '视频 B · 半身走位', liveNode_en:'Video B · Medium Shot',
+    step: '第 5/5 步 · 已运行 48s', step_en:'Step 5/5 · 48s elapsed',
+    featured: 'a-vidA',
+    bounds: { x: -20, y: 70, w: 1204, h: 690 },
+    foot: '3 项已完成 · 1 项部分完成 · 1 项进行中',
+    foot_en: '3 done · 1 partial · 1 running',
+    steps: [
+      { k:'run',  title:'视频 B · 半身走位', en:'Video B · Medium Shot', sub:'Seedance 2.5 · 生成视频', sub_en:'Seedance 2.5 · video generation', d:'48.0s' },
+      { k:'done', title:'视频 A · 面部特写', en:'Video A · Close-up', sub:'Seedance 2.5 · 生成视频', sub_en:'Seedance 2.5 · video generation', d:'1m52s' },
+      { k:'part', title:'初始人物 · 老年化', en:'Aged Version', sub:'Seedream 5.0 Pro · 有 1 帧被重绘', sub_en:'Seedream 5.0 Pro · 1 frame redrawn', d:'1m18s',
+        evidence: [
+          ['入参','Input', '{ "ref": "img_01", "age": 70, "keep_identity": true, "model": "seedream-5.0-pro" }'],
+          ['出参','Output', '2 candidates · 1728×2304 · 1 frame redrawn'],
+          ['耗时','Duration', '1m18s · model Seedream 5.0 Pro · token 3.1k'],
+          ['重绘的','Redrawn', 'Candidate b, frame 1: facial drift, discarded <span style="color:var(--warn)">[view]</span>']
+        ] },
+      { k:'done', title:'初始人物', en:'Initial Character', sub:'Seedream 5.0 Pro · 生成图像', sub_en:'Seedream 5.0 Pro · image generation', d:'1m04s' },
+      { k:'done', title:'提示词解析', en:'Prompt Parsing', sub:'Deepseek-V4-Pro · 拆成 1 条图像提示与 2 条运动提示', sub_en:'Deepseek-V4-Pro · 1 image + 2 motion prompts', d:'2.0s' }
+    ]
+  },
+  B: {
+    key: 'B',
+    label: '示例 B', en:'Example B',
+    name: '登山队员', name_en:'Mountaineer',
+    runId: 'Run #1907',
+    liveNode: '视频 B · 特写镜头', liveNode_en:'Video B · Close-up',
+    step: '第 4/4 步 · 已运行 48s', step_en:'Step 4/4 · 48s elapsed',
+    featured: 'b-vidA',
+    bounds: { x: -20, y: 946, w: 1204, h: 790 },
+    foot: '2 项已完成 · 1 项部分完成 · 1 项进行中',
+    foot_en: '2 done · 1 partial · 1 running',
+    steps: [
+      { k:'run',  title:'视频 B · 特写镜头', en:'Video B · Close-up', sub:'Seedance 2.5 · 生成视频', sub_en:'Seedance 2.5 · video generation', d:'48.0s' },
+      { k:'done', title:'视频 A · 全景镜头', en:'Video A · Wide Shot', sub:'Seedance 2.5 · 生成视频', sub_en:'Seedance 2.5 · video generation', d:'1m52s' },
+      { k:'part', title:'初始人物', en:'Initial Character', sub:'Seedream 5.0 Pro · 有 1 帧被重绘', sub_en:'Seedream 5.0 Pro · 1 frame redrawn', d:'1m04s',
+        evidence: [
+          ['入参','Input', '{ "from": "prompt", "aspect": "1:1", "size": "5792x5792", "variants": 2 }'],
+          ['出参','Output', '2 candidates · 5792×5792 · 1 frame redrawn'],
+          ['耗时','Duration', '1m04s · model Seedream 5.0 Pro · token 3.1k'],
+          ['重绘的','Redrawn', 'Candidate b: edge repeat artifacts, discarded <span style="color:var(--warn)">[view]</span>']
+        ] },
+      { k:'done', title:'提示词解析', en:'Prompt Parsing', sub:'Deepseek-V4-Pro · 拆成 1 条图像提示与 2 条运镜提示', sub_en:'Deepseek-V4-Pro · 1 image + 2 camera prompts', d:'2.0s' }
+    ]
+  }
+};
+const RUN_KEYS = ['A', 'B'];
+
+/* everything, frames included */
+const BOUNDS = { x: -20, y: 70, w: 1204, h: 1666 };
+
+const WIRES = [];
+NODES.forEach(function(n){
+  (n.from || []).forEach(function(from){ WIRES.push({ from: from, to: n.id }); });
+});
+
+const byId = {};
+NODES.forEach(function(n){ byId[n.id] = n; });
+
+/* a node only shows the ports a wire actually uses */
+const hasOut = {};
+WIRES.forEach(function(w){ hasOut[w.from] = true; });
+
+/* run frames: one dashed rounded box per example, labelled on its top border */
+const framesHost = $('#frames');
+RUN_KEYS.forEach(function(k){
+  const b = RUNS[k].bounds;
+  const el = document.createElement('div');
+  el.className = 'frame';
+  el.style.setProperty('--x', b.x + 'px');
+  el.style.setProperty('--y', b.y + 'px');
+  el.style.setProperty('--w', b.w + 'px');
+  el.style.setProperty('--h', b.h + 'px');
+  el.innerHTML = '<span class="frame-label">' + RUNS[k].label + ' <span class="en">' + RUNS[k].en + '</span> · ' + RUNS[k].name + ' <span class="en">' + RUNS[k].name_en + '</span></span>';
+  framesHost.appendChild(el);
+});
+
+/* ═══════════════════════════ 3 · wires ═══════════════════════════ */
+const wiresSvg = $('#wires');
+const wireEls = {};
+
+function portOut(n){ return { x: n.x + n.w, y: n.y + HEAD + PORT_DY }; }
+function portIn(n){ return { x: n.x, y: n.y + HEAD + PORT_DY }; }
+
+function pathFor(a, b){
+  const p1 = portOut(a), p2 = portIn(b);
+  const dx = clamp(Math.max(48, Math.abs(p2.x - p1.x) * 0.5) + Math.abs(p2.y - p1.y) * 0.22, 48, 210);
+  return 'M' + p1.x + ' ' + p1.y +
+         ' C' + (p1.x + dx) + ' ' + p1.y + ',' +
+                (p2.x - dx) + ' ' + p2.y + ',' +
+                p2.x + ' ' + p2.y;
+}
+
+WIRES.forEach(function(w, i){
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', pathFor(byId[w.from], byId[w.to]));
+  p.dataset.from = w.from;
+  p.dataset.to = w.to;
+  p.dataset.i = i;
+  wiresSvg.appendChild(p);
+  wireEls[w.from + '>' + w.to] = p;
+});
+
+/* one-shot draw-in. Authored in its final state: reduced motion simply never runs it. */
+function drawInWires(){
+  if (RM) return;
+  $$('path', wiresSvg).forEach(function(p, i){
+    const len = p.getTotalLength();
+    p.animate(
+      [{ strokeDasharray: len + ' ' + len, strokeDashoffset: len },
+       { strokeDasharray: len + ' ' + len, strokeDashoffset: 0 }],
+      { duration: 620, delay: 90 + i * 55, easing: 'cubic-bezier(.16,1,.3,1)', fill: 'backwards' }
+    );
+  });
+}
+
+/* ═══════════════════════════ 4 · nodes ═══════════════════════════ */
+const nodesHost = $('#nodes');
+const nodeEls = {};
+
+NODES.forEach(function(n){
+  const el = document.createElement('div');
+  el.className = 'node is-' + n.status;
+  el.dataset.id = n.id;
+  el.style.setProperty('--x', n.x + 'px');
+  el.style.setProperty('--y', n.y + 'px');
+  el.style.setProperty('--w', n.w + 'px');
+  el.style.setProperty('--h', n.h + 'px');
+
+  const flag = n.flag
+    ? '<span class="node-flag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5L21 20H3l9-15.5z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>' + n.flag + ' <span class="en">' + (n.flag_en || '') + '</span></span>'
+    : '';
+  const stat = n.status === 'queued'
+    ? '<span class="qbadge">排队 <span class="en">Queued</span></span>'
+    : (n.status === 'running'
+        ? '<span class="node-stat">' + n.elapsed + '</span>'
+        : '<span class="node-stat">' + n.time + '</span>');
+
+  const media = mediaHTML(n);
+
+  let foot = '';
+  if (n.status === 'running'){
+    foot = '<div class="node-foot"><span class="progress"><i style="width:' +
+           Math.round(n.progress * 100) + '%"></i></span><span class="t">' +
+           Math.round(n.progress * 100) + '%</span></div>';
+  }
+
+  el.innerHTML =
+    '<div class="node-head">' +
+      '<span class="node-title">' + n.title + ' <span class="en">' + (n.en || '') + '</span></span>' +
+      '<span class="node-model">' + n.model + '</span>' +
+    '</div>' +
+    '<div class="node-card">' +
+      '<button class="node-hit" type="button" aria-pressed="false" aria-label="查看 ' + n.title + ' (' + (n.en || '') + ') 的产物"></button>' +
+      (n.from && n.from.length ? '<span class="port port-in" aria-hidden="true"></span>' : '') +
+      (hasOut[n.id] ? '<span class="port port-out" aria-hidden="true"></span>' : '') +
+      '<div class="node-bar">' +
+        '<span class="chip ' + n.chipCls + '">' + n.chip + ' <span class="en">' + ZH_EN[n.chip] + '</span></span>' +
+        flag +
+        '<span class="grow"></span>' +
+        stat +
+      '</div>' +
+      media + foot +
+    '</div>';
+
+  nodesHost.appendChild(el);
+  nodeEls[n.id] = el;
+
+  $('.node-hit', el).addEventListener('click', function(){ goTo(n.id); });
+  el.addEventListener('pointerenter', function(){ emphasize(n.id); });
+  el.addEventListener('pointerleave', function(){ emphasize(state.selected); });
+
+  const v = $('video', el);
+  if (v) primeVideo(v);
+});
+
+/* ═══════════════════════════ 5 · media ═══════════════════════════
+   Node thumbnails are the real artefacts. A <video> parked on a poster frame stays
+   crisp at any canvas zoom, which a rasterised canvas would not.               */
+function primeVideo(v){
+  const seek = function(){
+    if (v.dataset.primed) return;
+    v.dataset.primed = '1';
+    const d = v.duration;
+    if (!d || !isFinite(d)) return;
+    try { v.currentTime = Math.min(0.5, d * 0.05); } catch (e) {}
+  };
+  if (v.readyState >= 1) seek();
+  else v.addEventListener('loadedmetadata', seek, { once: true });
+}
+
+function mediaHTML(n){
+  if (n.kind === 'text') return '<div class="node-media is-text">' + n.prompt + '</div>';
+  if (n.status === 'queued') return '<div class="node-media is-empty"><span>等待上游</span></div>';
+
+  const overlay = n.status === 'running'
+    ? '<span class="veil"></span><span class="scan"></span><span class="centermark"><span class="spinner"></span></span>'
+    : '';
+  const inner = n.kind === 'image'
+    ? '<img src="' + n.src + '" alt="' + (n.alt || n.title) + '" decoding="async">'
+    : '<video src="' + n.src + '" muted playsinline preload="metadata"></video>';
+  return '<div class="node-media">' + inner + overlay + '</div>';
+}
+
+/* ═══════════════════════════ 6 · player ═══════════════════════════
+   The transport drives a real <video>; a still gets a disabled transport rather
+   than a fake one, because a scrubber that cannot scrub is a lie.              */
+const vid = $('#filmVid'), still = $('#filmImg'), board = $('#board');
+const scrub  = $('#scrub');
+const playBtn = $('#playBtn');
+const playIcon = $('#playIcon');
+const tcNow = $('#tcNow'), tcDur = $('#tcDur');
+const filmWrap = $('#filmWrap'), filmEmpty = $('#filmEmpty');
+
+const PLAY_PATH = '<path d="M7 4.5l12 7.5-12 7.5z"/>';
+const PAUSE_PATH = '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/>';
+
+const player = { node: byId['a-vidA'], mode: 'video' };
+
+function fmt(s){
+  s = Math.max(0, s);
+  const m = Math.floor(s / 60), r = s - m * 60;
+  return String(m).padStart(2, '0') + ':' + (r < 10 ? '0' : '') + r.toFixed(2);
+}
+
+function paintTransport(){
+  /* only the video mode owns the transport: a stray event fired while unloading
+     the element must not overwrite what a still / text / empty state put there */
+  if (player.mode !== 'video') return;
+  const dur = isFinite(vid.duration) ? vid.duration : 0;
+  const pct = dur > 0 ? (vid.currentTime / dur) * 100 : 0;
+  scrub.value = String(Math.round(pct * 10));
+  scrub.style.setProperty('--fill', pct.toFixed(2) + '%');
+  tcNow.textContent = fmt(dur > 0 ? vid.currentTime : 0);
+  tcDur.textContent = dur > 0 ? fmt(dur) : '00:00.00';
+}
+
+function setPlayingIcon(on){
+  playIcon.innerHTML = on ? PAUSE_PATH : PLAY_PATH;
+  playBtn.classList.toggle('is-playing', on);
+  playBtn.setAttribute('aria-label', on ? 'Pause' : 'Play');
+}
+
+function play(){ if (player.mode === 'video') { const p = vid.play(); if (p && p.catch) p.catch(function(){}); } }
+function pause(){ vid.pause(); }
+function toggle(){ if (player.mode !== 'video') return; vid.paused ? play() : pause(); }
+
+vid.addEventListener('play', function(){ setPlayingIcon(true); });
+vid.addEventListener('pause', function(){ setPlayingIcon(false); });
+vid.addEventListener('loadedmetadata', paintTransport);
+vid.addEventListener('timeupdate', paintTransport);
+vid.addEventListener('seeked', paintTransport);
+
+function loadMedia(n){
+  player.node = n;
+  filmEmpty.hidden = true;
+  board.hidden = true;
+  $('#filmBadge').textContent = n.take || '';
+
+  if (n.kind === 'image'){
+    player.mode = 'image';
+    unloadMedia();
+    still.hidden = false;
+    if (still.getAttribute('src') !== n.src) still.src = n.src;
+    still.alt = (n.alt || n.title) + ' 的产物';
+    scrub.disabled = true;
+    playBtn.disabled = true;
+    tcNow.textContent = '00:00.00';
+    tcDur.textContent = 'Still';
+    $('#filmNote').textContent = n.params[0][2] + ' · ' + n.params[1][2];
+  } else {
+    player.mode = 'video';
+    still.hidden = true;
+    still.removeAttribute('src');
+    vid.hidden = false;
+    scrub.disabled = false;
+    playBtn.disabled = false;
+    if (vid.getAttribute('src') !== n.src){
+      vid.setAttribute('src', n.src);
+      vid.load();
+    }
+    $('#filmNote').textContent = n.params[0][2] + ' · ' + n.params[1][2] + ' · ' + n.params[2][2];
+    if (!RM) play();
+    paintTransport();
+  }
+}
+
+/* a text node shows its words on paper rather than an empty player: an empty state
+   that says "there is nothing here" is worse than showing the thing there is */
+function loadText(n){
+  player.mode = 'text';
+  unloadMedia();
+  board.hidden = false;
+  filmEmpty.hidden = true;
+  scrub.disabled = true;
+  playBtn.disabled = true;
+  scrub.value = '0';
+  scrub.style.setProperty('--fill', '0%');
+  tcNow.textContent = '00:00.00';
+  tcDur.textContent = 'Text';
+  $('#boardKicker').innerHTML = '提示词 <span class="en">Prompt</span> · ' + n.model;
+  $('#boardZh').textContent = n.prompt;
+  $('#boardEn').textContent = n.prompt_en || '';
+  $('#filmBadge').textContent = n.take || 'TEXT';
+  $('#filmNote').textContent = n.prompt.length + ' chars · no timeline';
+}
+
+function unloadMedia(){
+  vid.pause();
+  if (vid.getAttribute('src')){ vid.removeAttribute('src'); vid.load(); }
+  vid.hidden = true;
+  still.hidden = true;
+  still.removeAttribute('src');
+  board.hidden = true;
+}
+
+function showEmpty(title, sub, badge, note){
+  player.mode = 'empty';
+  unloadMedia();
+  filmEmpty.hidden = false;
+  scrub.disabled = true;
+  playBtn.disabled = true;
+  scrub.value = '0';
+  scrub.style.setProperty('--fill', '0%');
+  tcNow.textContent = '00:00.00';
+  tcDur.textContent = '—';
+  $('#emptyTitle').textContent = title;
+  $('#emptySub').textContent = sub;
+  $('#filmBadge').textContent = badge;
+  $('#filmNote').textContent = note;
+}
+
+/* ═══════════════════════════ 7 · stage binding ═══════════════════════════ */
+const state = { selected: 'a-vidA' };
+
+function loadNode(n){
+  if (n.kind === 'text'){
+    loadText(n);
+  } else if (n.status === 'queued'){
+    showEmpty('还没有产物', n.title + ' 排队中', n.take || 'OUTPUT', '排队中');
+  } else {
+    loadMedia(n);
+  }
+
+  $('#stageChip').innerHTML = n.chip + ' <span class="en">' + ZH_EN[n.chip] + '</span>';
+  $('#stageChip').className = 'chip ' + n.chipCls;
+  $('#stageTitle').innerHTML = n.title + ' <span class="en">' + (n.en || '') + '</span>';
+  $('#stageModel').textContent = n.model;
+  $('#promptZh').textContent = n.prompt;
+  $('#promptEn').textContent = n.prompt_en || '';
+
+  const kv = $('#kvBox');
+  kv.innerHTML = n.params.map(function(p){
+    return '<div><dt>' + p[0] + ' <span class="en">' + p[1] + '</span></dt>' +
+           '<dd>' + p[2] + (p[3] ? ' <span class="en">' + p[3] + '</span>' : '') + '</dd></div>';
+  }).join('');
+
+  const prov = $('#prov');
+  if (n.from && n.from.length){
+    prov.innerHTML = '<span>上游 <span class="en">From</span></span>' + n.from.map(function(id){
+      return '<button class="linkbtn" type="button" data-goto="' + id + '">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 1 0-6l2-2a4 4 0 0 1 6 6l-1 1"/><path d="M14 10a4 4 0 0 1 0 6l-2 2a4 4 0 0 1-6-6l1-1"/></svg>' +
+        '<span>' + byId[id].title + ' <span class="en">' + (byId[id].en || '') + '</span></span></button>';
+    }).join('');
+  } else {
+    prov.innerHTML = '<span>无上游，这是本次运行的起点 <span class="en">No upstream — the start of this run</span></span>';
+  }
+  $$('[data-goto]', prov).forEach(function(b){
+    b.addEventListener('click', function(){ goTo(b.dataset.goto); });
+  });
+}
+
+function select(id){
+  if (!byId[id]) return;
+  state.selected = id;
+  NODES.forEach(function(n){
+    const el = nodeEls[n.id];
+    const on = n.id === id;
+    el.classList.toggle('is-selected', on);
+    $('.node-hit', el).setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  emphasize(id);
+  setActiveRun(byId[id].run);   /* the footer follows whichever example you are on */
+}
+
+/* ── the active run drives the footer and the run log ── */
+let activeRun = 'A';
+
+const STEP_ICON = {
+  done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7"/></svg>',
+  part: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.5L21 20H3l9-15.5z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>',
+  run:  '<span class="spinner" style="width:13px;height:13px;border-width:1.6px"></span>'
+};
+
+function renderRunLog(key){
+  /* 运行记录浮层已按需求移除；这里保留空函数，setActiveRun() 仍会调用它。 */
+}
+function setActiveRun(key){
+  if (!RUNS[key]) return;
+  activeRun = key;
+  const R = RUNS[key];
+  $('#liveRun').innerHTML = R.label + ' <span class="en">' + R.en + '</span>';
+  $('#liveNode').innerHTML = R.liveNode + ' <span class="en">' + R.liveNode_en + '</span>';
+  $('#liveStep').innerHTML = R.step + ' <span class="en">' + R.step_en + '</span>';
+  RUN_KEYS.forEach(function(k){
+    const b = $('#jump' + k);
+    if (b) b.setAttribute('aria-pressed', String(k === key));
+  });
+  renderRunLog(key);
+}
+
+function jumpToRun(key){
+  const R = RUNS[key];
+  if (!R) return;
+  frameRun(key);
+  select(R.featured);            /* select() re-runs setActiveRun; no need to call it */
+  loadNode(byId[R.featured]);
+}
+
+function emphasize(id){
+  const lit = {};
+  lit[id] = true;
+  WIRES.forEach(function(w){
+    if (w.from === id || w.to === id){ lit[w.from] = true; lit[w.to] = true; }
+  });
+  Object.keys(wireEls).forEach(function(k){
+    const p = wireEls[k];
+    const on = p.dataset.from === id || p.dataset.to === id;
+    p.classList.toggle('lit', on);
+    p.classList.toggle('dim', !on);
+  });
+  NODES.forEach(function(n){
+    nodeEls[n.id].classList.toggle('dim-node', !lit[n.id]);
+  });
+}
+
+/* click a node -> load it; centre the canvas on it */
+function goTo(id){
+  select(id);
+  loadNode(byId[id]);
+  centerOn(byId[id]);
+}
+
+/* ═══════════════════════════ 8 · pan / zoom / minimap ═══════════════════════════ */
+const viewport = $('#viewport'), graph = $('#graph');
+const view = { x: 0, y: 0, z: 0.9, min: 0.3, max: 1.8 };
+
+function applyView(){
+  graph.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.z + ')';
+  $('#zoomPct').textContent = Math.round(view.z * 100) + '%';
+  paintMinimap();
+}
+function centerOn(n){
+  userMoved = true;
+  const r = viewport.getBoundingClientRect();
+  view.x = r.width / 2 - (n.x + n.w / 2) * view.z;
+  view.y = r.height / 2 - (n.y + n.h / 2) * view.z;
+  applyView();
+}
+function zoomAt(factor, cx, cy){
+  userMoved = true;
+  const z2 = clamp(view.z * factor, view.min, view.max);
+  const k = z2 / view.z;
+  view.x = cx - (cx - view.x) * k;
+  view.y = cy - (cy - view.y) * k;
+  view.z = z2;
+  applyView();
+}
+/* Framing is always "fit this rectangle", with a legibility floor. Fitting the
+   whole board puts the node titles at ~5px, so the example buttons fit one run
+   and only 适应视图 dares to fit both. */
+function fitRect(b, pad, zMin, zMax){
+  const r = viewport.getBoundingClientRect();
+  const z = clamp(Math.min((r.width - pad * 2) / b.w, (r.height - pad * 2) / b.h), zMin, zMax);
+  return {
+    z: z,
+    x: (r.width - b.w * z) / 2 - b.x * z,
+    y: (r.height - b.h * z) / 2 - b.y * z
+  };
+}
+function applyFit(t){ view.z = t.z; view.x = t.x; view.y = t.y; applyView(); }
+
+function fit(){                      /* 适应视图: the whole board, both examples */
+  userMoved = true;
+  applyFit(fitRect(BOUNDS, 30, 0.28, 0.94));
+}
+
+function frameRun(key){              /* 示例 A / 示例 B: one run, at a readable zoom */
+  userMoved = true;
+  applyFit(fitRect(RUNS[key].bounds, 26, 0.58, 0.94));
+}
+
+/* Canvas size depends on fonts and the surrounding panels, so the opening framing
+   runs again once layout has settled, unless the user has already taken the view. */
+function frameGraph(){
+  const r = viewport.getBoundingClientRect();
+  if (!r.width || !r.height || userMoved) return;
+  applyFit(fitRect(RUNS[activeRun].bounds, 26, 0.58, 0.94));
+}
+
+let panning = null;
+let userMoved = false;   /* once the user drives the view, stop re-framing it for them */
+viewport.addEventListener('pointerdown', function(e){
+  if (e.target.closest('.node') || e.target.closest('.minimap')) return;
+  panning = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+  viewport.classList.add('is-panning');
+  viewport.setPointerCapture(e.pointerId);
+});
+viewport.addEventListener('pointermove', function(e){
+  if (!panning) return;
+  userMoved = true;
+  view.x = panning.vx + (e.clientX - panning.x);
+  view.y = panning.vy + (e.clientY - panning.y);
+  applyView();
+});
+function endPan(e){
+  if (!panning) return;
+  panning = null;
+  viewport.classList.remove('is-panning');
+  if (e && e.pointerId != null && viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
+}
+viewport.addEventListener('pointerup', endPan);
+viewport.addEventListener('pointercancel', endPan);
+viewport.addEventListener('pointerleave', endPan);
+
+viewport.addEventListener('wheel', function(e){
+  e.preventDefault();
+  userMoved = true;
+  const r = viewport.getBoundingClientRect();
+  if (e.ctrlKey || e.metaKey){
+    zoomAt(Math.pow(0.9988, e.deltaY), e.clientX - r.left, e.clientY - r.top);
+  } else {
+    view.x -= e.deltaX; view.y -= e.deltaY; applyView();
+  }
+}, { passive: false });
+
+$('#zoomIn').addEventListener('click', function(){
+  const r = viewport.getBoundingClientRect(); zoomAt(1.18, r.width / 2, r.height / 2);
+});
+$('#zoomOut').addEventListener('click', function(){
+  const r = viewport.getBoundingClientRect(); zoomAt(1 / 1.18, r.width / 2, r.height / 2);
+});
+$('#zoomFit').addEventListener('click', fit);
+
+$$('.seg button').forEach(function(b){
+  b.addEventListener('click', function(){
+    $$('.seg button').forEach(function(o){ o.setAttribute('aria-pressed', String(o === b)); });
+    viewport.style.cursor = b.getAttribute('aria-label') === '抓手工具' ? 'grab' : 'default';
+  });
+});
+
+/* minimap: node markers are built once, only the viewport rect moves */
+const mm = $('#minimap');
+const MMW = 176, MMH = 112, MMP = 15;
+const mmScale = Math.min((MMW - MMP * 2) / BOUNDS.w, (MMH - MMP * 2) / BOUNDS.h);
+const mmOX = (MMW - BOUNDS.w * mmScale) / 2, mmOY = (MMH - BOUNDS.h * mmScale) / 2;
+const mmVp = document.createElement('span');
+mmVp.className = 'vp';
+function buildMinimap(){
+  mm.innerHTML = NODES.map(function(n){
+    return '<i data-mm="' + n.id + '" style="left:' + (mmOX + (n.x - BOUNDS.x) * mmScale) + 'px;top:' + (mmOY + (n.y - BOUNDS.y) * mmScale) +
+      'px;width:' + Math.max(3, n.w * mmScale) + 'px;height:' + Math.max(3, n.h * mmScale) + 'px"></i>';
+  }).join('');
+  mm.appendChild(mmVp);
+}
+function paintMinimap(){
+  const r = viewport.getBoundingClientRect();
+  if (!r.width) return;
+  mmVp.style.left = (mmOX + (-view.x / view.z - BOUNDS.x) * mmScale) + 'px';
+  mmVp.style.top = (mmOY + (-view.y / view.z - BOUNDS.y) * mmScale) + 'px';
+  mmVp.style.width = (r.width / view.z * mmScale) + 'px';
+  mmVp.style.height = (r.height / view.z * mmScale) + 'px';
+  NODES.forEach(function(n){
+    const el = mm.querySelector('[data-mm="' + n.id + '"]');
+    if (el) el.classList.toggle('on', n.id === state.selected);
+  });
+}
+mm.addEventListener('click', function(e){
+  userMoved = true;
+  const r = mm.getBoundingClientRect(), vr = viewport.getBoundingClientRect();
+  const gx = BOUNDS.x + (e.clientX - r.left - mmOX) / mmScale;
+  const gy = BOUNDS.y + (e.clientY - r.top - mmOY) / mmScale;
+  view.x = vr.width / 2 - gx * view.z;
+  view.y = vr.height / 2 - gy * view.z;
+  applyView();
+});
+mm.addEventListener('keydown', function(e){
+  if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fit(); }
+});
+
+/* keyboard: arrow-browse the graph, Esc clears emphasis back to the selection */
+viewport.addEventListener('keydown', function(e){
+  const i = NODES.findIndex(function(n){ return n.id === state.selected; });
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown'){ e.preventDefault(); goTo(NODES[(i + 1) % NODES.length].id); }
+  if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp'){ e.preventDefault(); goTo(NODES[(i - 1 + NODES.length) % NODES.length].id); }
+});
+
+/* ═══════════════════════════ 9 · transport wiring ═══════════════════════════ */
+playBtn.addEventListener('click', toggle);
+filmWrap.addEventListener('click', function(){
+  if (player.mode === 'video') toggle();
+});
+scrub.addEventListener('input', function(){
+  const dur = vid.duration;
+  if (player.mode !== 'video' || !isFinite(dur)) return;
+  vid.currentTime = (Number(scrub.value) / 1000) * dur;
+  paintTransport();
+});
+$('#muteBtn').addEventListener('click', function(){
+  const on = this.getAttribute('aria-pressed') === 'true';
+  this.setAttribute('aria-pressed', String(!on));
+  this.classList.toggle('is-on', !on);
+  vid.muted = !on;
+  toast(on ? '已取消静音 <span class="en">Unmuted</span>' : '已静音 <span class="en">Muted</span>');
+});
+$('#fullBtn').addEventListener('click', function(){
+  if (filmWrap.requestFullscreen) filmWrap.requestFullscreen();
+  else toast('当前浏览器不支持全屏播放 <span class="en">Fullscreen is not supported here</span>');
+});
+document.addEventListener('keydown', function(e){
+  if (e.key === ' ' && e.target === document.body){ e.preventDefault(); toggle(); }
+});
+
+/* ═══════════════════════════ 10 · run controls ═══════════════════════════
+   This page is a read-only presentation of a finished-ish run: the run controls
+   are drawn so the composition is complete, but they change nothing. Every one of
+   them says so when pressed rather than silently doing nothing.                    */
+const ICON = {
+  ok:   '<path d="M5 12.5l4.5 4.5L19 7"/>',
+  warn: '<path d="M12 4.5L21 20H3l9-15.5z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+  view: '<path d="M2.6 12S6.2 6.6 12 6.6 21.4 12 21.4 12 17.8 17.4 12 17.4 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.9"/>'
+};
+function toast(msg, kind){
+  const box = $('#toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    (ICON[kind] || ICON.ok) + '</svg><span>' + msg + '</span>';
+  box.appendChild(el);
+  setTimeout(function(){
+    el.classList.add('out');
+    setTimeout(function(){ el.remove(); }, 220);
+  }, 2600);
+}
+
+$('#stopBtn').addEventListener('click', function(){
+  toast('仅供浏览 · 停止不会真的中断任务 <span class="en">View-only · Stop will not actually interrupt</span>', 'view');
+});
+$('#exportBtn').addEventListener('click', function(){
+  toast('仅供浏览 · 不会真的导出文件 <span class="en">View-only · No file will be exported</span>', 'view');
+});
+/* jump between the two example runs: frame the run and follow it in the player */
+RUN_KEYS.forEach(function(k){
+  const b = $('#jump' + k);
+  if (b) b.addEventListener('click', function(){ jumpToRun(k); });
+});
+
+/* ═══════════════════════════ 11 · boot ═══════════════════════════ */
+function boot(){
+  vid.loop = true;
+  select(RUNS.A.featured);                 /* opens on 示例 A, footer follows it */
+  loadNode(byId[RUNS.A.featured]);
+  buildMinimap();
+  paintTransport();
+
+  /* open framed on 示例 A, then re-frame once layout + fonts settle */
+  frameGraph();
+
+  requestAnimationFrame(function(){
+    drawInWires();
+    frameGraph();
+  });
+
+  if (document.fonts && document.fonts.ready){
+    document.fonts.ready.then(function(){ frameGraph(); });
+  }
+
+  let rt;
+  addEventListener('resize', function(){
+    clearTimeout(rt);
+    rt = setTimeout(function(){ paintMinimap(); frameGraph(); }, 160);
+  });
+
+  document.addEventListener('visibilitychange', function(){
+    if (document.hidden) pause();
+    else if (!RM && player.mode === 'video' && vid.paused) play();
+  });
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+})();
+</script>
+</body>
+</html>

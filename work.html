@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作品详情 · 我的作品集</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 新增依赖：Instrument Serif（展示衬线，与画廊页统一） -->
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafafa; --ink:#0e0e0e; --ink-2:#1a1616;
+  --gray:#676767; --gray-l1:#9c9996; --gray-l3:#d9d9d9; --silver:#d9d9d9;
+  --accent:#f04e23;
+  --line:rgba(14,14,14,.26); --line-soft:rgba(14,14,14,.11);
+  --pad:clamp(12px,1.9vw,28px); --matw:6px; --orn:clamp(20px,2.2vw,30px);
+  --ease:cubic-bezier(0.2,0,0,1); --ease-quart:cubic-bezier(.76,0,.24,1); --ease-out:cubic-bezier(0,0,.2,1);
+}
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{ min-height:100%; }
+body{
+  font-family:"Space Grotesk","Noto Sans SC",system-ui,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(rgba(14,14,14,.10) 1px, transparent 1.4px) 0 0 / 15px 15px,
+    var(--paper);
+  display:flex; flex-direction:column; align-items:center;
+  padding-bottom:calc(var(--pad) + var(--matw) + 26px);
+}
+
+/* 与画廊页一致的美术馆画框 */
+.gallery-frame{
+  position:fixed; inset:var(--pad); border:1px solid var(--line);
+  pointer-events:none; z-index:20;
+}
+.gallery-frame::before{ content:""; position:absolute; inset:var(--matw); border:1px solid var(--line-soft); }
+.corner{ position:absolute; width:var(--orn); height:var(--orn); }
+.corner::after{ content:""; position:absolute; width:5px; height:5px; background:var(--gray-l1); transform:rotate(45deg); }
+.tl{ top:var(--matw); left:var(--matw); border-top:1px solid var(--line); border-left:1px solid var(--line); }
+.tr{ top:var(--matw); right:var(--matw); border-top:1px solid var(--line); border-right:1px solid var(--line); }
+.bl{ bottom:var(--matw); left:var(--matw); border-bottom:1px solid var(--line); border-left:1px solid var(--line); }
+.br{ bottom:var(--matw); right:var(--matw); border-bottom:1px solid var(--line); border-right:1px solid var(--line); }
+.tl::after{ top:-3px; left:-3px; }    .tr::after{ top:-3px; right:-3px; }
+.bl::after{ bottom:-3px; left:-3px; } .br::after{ bottom:-3px; right:-3px; }
+.plaque{
+  position:absolute; left:50%; transform:translateX(-50%);
+  font-size:clamp(8.5px,.72vw,10px); letter-spacing:.22em; text-transform:uppercase;
+  color:var(--gray-l1); white-space:nowrap;
+}
+.plaque.top{ top:calc(var(--matw) + 11px); }
+.plaque.bot{ bottom:calc(var(--matw) + 11px); }
+
+/* ============ 顶部胶囊：返回按钮 ============ */
+.topbar{
+  position:fixed; z-index:30;
+  top:calc(var(--pad) + var(--matw) + 10px); left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:12px;
+  height:40px; padding:0 16px;
+  background:var(--ink-2); border:1px solid var(--silver); border-radius:8px;
+  box-shadow:0 12px 28px -14px rgba(14,14,14,.55);
+  animation:barIn .7s .1s var(--ease-quart) both;
+}
+@keyframes barIn{ from{ opacity:0; transform:translateX(-50%) translateY(-10px);} to{ opacity:1; transform:translateX(-50%) translateY(0);} }
+.back{
+  display:inline-flex; align-items:center; gap:9px;
+  text-decoration:none; color:#fafafa;
+  font-size:11px; letter-spacing:.14em; text-transform:uppercase; line-height:1;
+  transition:color 180ms var(--ease-out);
+}
+.back:hover{ color:var(--accent); }
+.topbar .vr{ width:1px; height:16px; background:rgba(250,250,250,.16); }
+.topbar .brand{ font-family:"Instrument Serif",serif; font-size:15px; color:#fafafa; white-space:nowrap; }
+
+/* ============ 全幅黑底展示区（借鉴参考站 #canvas 分区：黑底 + 白色点阵 + 巨型字标） ============ */
+.showcase{
+  position:relative; width:100%; overflow:hidden;
+  background:var(--ink);
+  padding:calc(var(--pad) + var(--matw) + 74px) 24px clamp(34px,4vw,58px);
+  display:flex; flex-direction:column; align-items:center;
+}
+.showcase::before{
+  content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='15' height='15'%3E%3Crect x='6.5' y='6.5' width='2' height='2' rx='1' ry='1' fill='rgb(255,255,255)' fill-opacity='0.08'/%3E%3C/svg%3E");
+  background-size:15px 15px; background-repeat:repeat;
+}
+.wm{
+  position:absolute; left:50%; top:56%; transform:translate(-50%,-50%);
+  width:150%; max-width:none; height:auto; z-index:0; pointer-events:none; opacity:0;
+  animation:wmIn 1.6s .15s var(--ease-quart) forwards;
+}
+.wm text{ font-family:"Instrument Serif",serif; font-size:120px; letter-spacing:-.02em; fill:#fafafa; }
+@keyframes wmIn{ to{ opacity:.10; } }
+
+/* 装裱后的作品：白卡纸 + 1px 细描边 + 内衬留白 */
+.mount{
+  position:relative; z-index:1;
+  width:min(70vw,380px); padding:clamp(8px,1.4vw,16px);
+  background:#fff; border:1px solid var(--gray-l3); border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,.35), 0 40px 70px -26px rgba(0,0,0,.7);
+  animation:rise .8s .1s var(--ease-quart) both;
+}
+.poster{
+  position:relative; aspect-ratio:var(--ar,.75); overflow:hidden; border-radius:3px;
+  background:#e3e3e3;
+  box-shadow:inset 0 0 0 1px rgba(14,14,14,.08);
+}
+/* contain：整张作品完整显示，不裁切、不叠加任何遮罩。
+   画框比例跟着图片自身走（--ar），所以既不裁切也不会留边。 */
+.poster img{ width:100%; height:100%; object-fit:contain; display:block; }
+.mount .label{
+  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  padding:11px 2px 0; font-size:clamp(10px,1vw,13px);
+}
+.mount .label b{ color:var(--accent); font-weight:700; letter-spacing:.02em; }
+.mount .label span{ color:var(--ink); }
+
+/* 黑底上的作品信息（参考站：tag 行 + 巨型衬线标题） */
+.cap{ position:relative; z-index:1; margin-top:clamp(22px,3vw,34px); text-align:center; }
+.cap .num{ font-size:10px; letter-spacing:.24em; color:var(--gray-l1); text-transform:uppercase; }
+.cap h1{
+  font-family:"Instrument Serif",serif; font-weight:400;
+  font-size:clamp(34px,6vw,68px); line-height:1; letter-spacing:-.02em;
+  color:#fafafa; margin-top:14px;
+  animation:rise .9s .2s var(--ease-quart) both;
+}
+.cap .en{
+  margin-top:12px; font-size:clamp(10px,1vw,12px); letter-spacing:.28em;
+  text-transform:uppercase; color:var(--gray-l1);
+  animation:rise .9s .28s var(--ease-quart) both;
+}
+
+/* ============ 纸质信息区：参考站的规格表样式 ============ */
+.sheet{
+  width:min(92vw,760px); margin-top:clamp(28px,3.6vw,46px);
+  display:flex; flex-direction:column; gap:22px;
+}
+.row{
+  display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  padding-bottom:12px; border-bottom:1px solid var(--gray-l3);
+  font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+}
+.row .k{ color:var(--gray-l1); }
+.row .v{ color:var(--ink); font-size:12px; letter-spacing:.04em; text-transform:none; }
+.desc{
+  font-size:clamp(12.5px,1.05vw,14px); line-height:1.85; letter-spacing:.02em;
+  color:var(--gray); max-width:60ch;
+}
+.nav{ display:flex; gap:10px; margin-top:4px; flex-wrap:wrap; }
+.nav a{
+  text-decoration:none; color:var(--ink); font-size:12px; letter-spacing:.06em; line-height:1;
+  border:1px solid var(--gray-l3); border-radius:6px; padding:12px 22px;
+  background:#fff; transition:background-color 200ms var(--ease-out), color 200ms var(--ease-out), border-color 200ms var(--ease-out);
+}
+.nav a:hover{ background:var(--ink-2); color:#fafafa; border-color:var(--ink-2); }
+.nav a.primary{ background:var(--accent); color:var(--ink); border-color:var(--accent); }
+.nav a.primary:hover{ background:var(--ink); color:#fafafa; border-color:var(--ink); }
+.sheet > *{ animation:rise .8s var(--ease-quart) both; }
+.sheet > *:nth-child(2){ animation-delay:.08s; }
+.sheet > *:nth-child(3){ animation-delay:.16s; }
+.sheet > *:nth-child(4){ animation-delay:.24s; }
+
+@keyframes rise{ from{ opacity:0; transform:translateY(22px) scale(.98);} to{ opacity:1; transform:none;} }
+
+@media (max-width:860px){
+  :root{ --matw:5px; }
+  .showcase{ padding-top:calc(var(--pad) + var(--matw) + 70px); }
+  .mount{ width:min(84vw,340px); }
+  .row{ font-size:9px; letter-spacing:.14em; }
+}
+@media (prefers-reduced-motion: reduce){
+  .wm,.topbar,.mount,.cap h1,.cap .en,.sheet > *{ animation-duration:1ms !important; animation-delay:0ms !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="gallery-frame" aria-hidden="true">
+  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+  <span class="plaque top">Selected Works · Portfolio</span>
+  <span class="plaque bot" id="plaqueBot">Eighteen Pieces</span>
+</div>
+
+<header class="topbar">
+  <a class="back" href="3D画廊.html">← 返回画廊</a>
+  <span class="vr"></span>
+  <span class="brand">Selected Works</span>
+</header>
+
+<section class="showcase">
+  <svg class="wm" viewBox="0 0 1000 200" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+    <text id="wmText" x="500" y="140" text-anchor="middle"></text>
+  </svg>
+  <div class="mount">
+    <div class="poster" id="poster"></div>
+    <div class="label"><b id="no"></b><span id="lb"></span></div>
+  </div>
+  <div class="cap">
+    <div class="num" id="num"></div>
+    <h1 id="title"></h1>
+    <div class="en" id="en"></div>
+  </div>
+</section>
+
+<div class="sheet">
+  <div class="row"><span class="k">Work №</span><span class="v" id="vno"></span></div>
+  <div class="row"><span class="k">Title / 中文名</span><span class="v" id="vtitle"></span></div>
+  <div class="row"><span class="k">English</span><span class="v" id="ven"></span></div>
+  <p class="desc" id="desc"></p>
+  <div class="nav">
+    <a id="prev" href="#">← 上一件</a>
+    <a id="next" class="primary" href="#">下一件 →</a>
+  </div>
+</div>
+
+<script>
+/* 作品数据：与 index.html 的 works 一一对应（同一编号、同一标题）。
+   img = 详情页大图（原名不带 A 的那张）；ar = 图片宽高比，决定画框比例。
+   改标题时请两个文件一起改。 */
+const WORKS = [
+  { t:"大叻，2024", en:"Dalat, 2024", desc:"A rose-brick church clusters low and right, two-thirds of the sheet left as luminous sky. Fine ink linework fixes the architecture; watercolour handles the surrounding greenery, softened by dots and wet bleed. A blush oval stamped Dalat 2024 turns a drawing into a dated keepsake: resistance to disappearance.", img:"assets/works/detail/01.webp", ar:0.744 },
+  { t:"信仰是一束光", en:"Faith Is a Light", desc:"A gothic spire cuts vertically through a rough coral brushstroke that reads as light itself: not light falling on the tower but light as ground. Crosshatched ink lines shape the architecture; dry-brush colour leaves paper breathing through. Above and below, scripted verses. Steadfast, luminous, quietly devotional.", img:"assets/works/detail/02.webp", ar:0.744 },
+  { t:"有些火，不为取暖", en:"Some Fires Are Not Meant to Warm the World", desc:"A figure stands centred above a vast blank, dissolving into a radial burst of red and black streaks; a dim red disc is half-hidden behind the head. Photographic texture collides with brush-driven blur and print grain. Fire as rupture rather than warmth: a declaration of destructive, self-defining force.", img:"assets/works/detail/03.webp", ar:0.744 },
+  { t:"风知道我要去哪里", en:"The Wind Knows Where I Am Going", desc:"A grey-violet dry-brush panel frames a small half-length portrait, face masked by a checkered scarf, gaze directed out of frame. Ink and thin watercolour leave him barely described; the huge blank beneath carries two handwritten lines. Identity withheld, direction asserted: the wind, not the map, knows.", img:"assets/works/detail/04.webp", ar:0.744 },
+  { t:"继续走，世界在等你", en:"Keep Going, the World Is Waiting", desc:"The same figure returns inside the same grey-violet panel, now unrolling a blank white scroll across the centre: the only pure white, and the fulcrum of the composition. A companion piece to the portrait beside it, interior conviction answered by outward departure. The unwritten future is handed to the viewer.", img:"assets/works/detail/05.webp", ar:0.744 },
+  { t:"田园时光，1967", en:"Pastoral Days, 1967", desc:"Seven-eighths of the page is bare; a single cow, two grazing companions and pale hills occupy only the lowest strip. Washed greens and clay yellows, light values only, as though bleached by time. Two birds provide the sole movement against the stillness. Pastoral, invented 1967: an elegy for slowness.", img:"assets/works/detail/06.webp", ar:0.744 },
+  { t:"山坡旁，1964", en:"By the Hillside, 1964", desc:"A cow and her suckling calf hold the centre of a grassy island, the mother's gaze turned out of frame. Transparent glazes layer ochre and grey fleece against cerulean sky; grass built from dry short strokes. Warm against cool, vigilance against tenderness: the most naturalistic light in the series.", img:"assets/works/detail/07.webp", ar:0.744 },
+  { t:"简约，是一切优雅的基调", en:"Simplicity Is the Keynote of All True Elegance", desc:"A photograph and its vector reduction are stacked in dialogue: identical tall spruce and hut, identical shadows. The illustration strips texture to flat shapes, keeping only tonal structure. Sunlight, real grass and curated olive sit above one another, demonstrating rather than quoting the motto: simplicity as keynote, elegance as residue.", img:"assets/works/detail/08.webp", ar:0.667 },
+  { t:"在自然的怀抱里，遇见真正的自己", en:"In the Embrace of Nature", desc:"A flat vector valley of olive meadow, dark conifer wall, rocky orange mountain and small timber cabin occupies only the lowest sixth of the sheet. No gradients, no cast shadow; depth is built from layered silhouettes and tonal shifts. Nature abstracted into portable calm, numbered like an edition.", img:"assets/works/detail/09.webp", ar:0.667 },
+  { t:"冒险在召唤", en:"Adventure Awaits", desc:"A chibi portrait of the traveller: olive hooded jacket, checkered scarf across the mouth, backpack straps, haloed by a soft green airbrushed oval. Grainy crayon brushes keep it deliberately unpolished; a yellow star is the single accent. A mascot image of anticipation, youth, and the call outward.", img:"assets/works/detail/10.webp", ar:0.744 },
+  { t:"流浪的人，未必迷失", en:"Not All Who Wander Are Lost", desc:"A tiny walking figure is smeared into horizontal streaks of black and red on a large empty field; small black squares float at left, the epigraph sits low as a plinth. Motion blur turns walking into passing through. Tolkien's defence of drifting, restated for a figure without a face.", img:"assets/works/detail/11.webp", ar:0.744 },
+  { t:"路会温柔地记得你", en:"Softly, the Road Remembers", desc:"A road curves out of frame through a torn-paper window of flat colour: slate hills, olive scrub, a single thin post. Muted earth tones, risograph grain and one yellow dash draw the eye onward. Enormous emptiness becomes silence, and the road, already remembering the walker, carries memory beyond the picture edge.", img:"assets/works/detail/12.webp", ar:0.667 },
+  { t:"月、城堡与向日葵", en:"Nocturne for a Sunflower Moon", desc:"A stone crescent moon encloses a sleeping face, two complementary shapes locked in embrace; sunflowers arc between them while a miniature castle rests below. Cool slate blue meets high-chroma yellow, glazed with aged parchment. Digital painting mimics carved stone and porcelain skin. Together they form a wish-list: dream, fidelity, a castle held rather than reached.", img:"assets/works/detail/13.webp", ar:0.744 },
+  { t:"小小烛火，大大心愿", en:"Little Flame, Big Wishes", desc:"A single slice of cake, drawn in shaky crayon strokes, floats at the top of an otherwise empty sheet. Five colours only; a cool blue candle makes the yellow flame burn brighter. Childlike, deliberately clumsy linework turns the vast blank below into the volume of a wish: small flame, enormous asking.", img:"assets/works/detail/14.webp", ar:0.744 },
+  { t:"我们不是剪影", en:"We Are Not Silhouettes", desc:"A loose band of figures stands low in the frame beneath a single vertical shaft of vermilion, the only saturated colour on a near-monochrome paper field. Charcoal sweeps converge inward; long shadows steady the horizon. Silhouettes that refuse anonymity: a collective pause, dignified, before light returns.", img:"assets/works/detail/15.webp", ar:0.744 },
+  { t:"花园，1978", en:"Garden, 1978", desc:"Pen-and-wash watercolour builds a floating garden island: potted trees and pink blossom anchored left, a boardwalk leading right to a thatched cabin, distant hills dissolving into paper. Wet-in-wet washes, dry-brush fibres, untouched white as light. The invented year 1978 turns cultivation into recollection: a small, tendered paradise.", img:"assets/works/detail/16.webp", ar:0.744 },
+  { t:"静下来，便知", en:"Be Still, and Know", desc:"A palm-sized square of opaque paint floats high on an empty page: an arch of sand, ochre and dusty rose, a wooden crucifix above, a small pale figure at its centre. Coarse bristle edges, fresco-like residue. Below, two handwritten words of Psalm 46:10. Scale and silence, not ornament, carry the devotion.", img:"assets/works/detail/17.webp", ar:0.744 },
+  { t:"归隐，1987", en:"Retreat, 1987", desc:"A boardwalk crosses dark water to a thatched cabin, hedged by flowering shrubs; a small stone figure sits at right. Layered greens, warm timber and near-black water, with white blossoms replacing sunlight. Sponge-dabbed foliage and wet washes make a sanctuary: separated by water, connected by a bridge one need not cross.", img:"assets/works/detail/18.webp", ar:0.744 },
+  { t:"山抱一个韵字", en:"Yun: An Echo Between Mountains", desc:"A wordmark that is a landscape: three peaks — sage and two deep pines — cradle a white disc holding the calligraphic character Yun. A single gold line draws water below; a red seal anchors the corner. Sound becomes scenery, and the aftertone of tea is written as mountains holding one word.", img:"assets/works/detail/19.webp", ar:1.000 },
+  { t:"石上茶事", en:"Tea on Stone", desc:"Brand still life on stacked slate: a gnarled branch, a white porcelain deer, two cups and a pitcher bearing the Yun mark, one dark bloom at its foot, all against molten gold. Warm side light models every glaze and stone edge. An old literati table is restaged for a new tea house.", img:"assets/works/detail/20.webp", ar:1.780 },
+  { t:"纸上山水", en:"Mountains on Paper", desc:"A take-away cup becomes a scroll: the Yun landscape printed small on white paper, held sharp while stacked cups and lids blur into the dark room behind. Rim light rounds each mouth; shallow focus locks the gaze. The disposable object is quietly promoted, carrying mountains and water out the door.", img:"assets/works/detail/21.webp", ar:1.780 },
+  { t:"折页里的呼吸", en:"The Quiet Fold", desc:"Stationery speaks in a whisper: a folded card opens to a green mountain and the circled Yun, beside a business card and a single pencil on generous cream. High-key light erases almost every shadow. The identity lives in restraint — blank space kept as good manners, ink spent only where it must be.", img:"assets/works/detail/22.webp", ar:1.780 },
+  { t:"绿的秩序", en:"Order in Green", desc:"The system laid out in isometric discipline: deep-green boxes in four sizes, white tubes and a round soap marching along one diagonal on cream, the Yun landscape wrapping every surface. Soft top light, short shadows, two colours and a gold line — a family portrait of restraint, rhythm and repetition.", img:"assets/works/detail/23.webp", ar:1.780 },
+  { t:"把早晨调成慢速", en:"Where Slow Mornings Begin", desc:"A lifestyle app opens on cream white: an oversized greeting, pill filters, and one forest-green action colour. A full-bleed photograph of linen and curtain light anchors the grid; two warm thumbnails continue the palette. Hierarchy reads like a magazine contents page: everything invites slow reading, nothing shouts.", img:"assets/works/detail/24.webp", ar:0.462 },
+  { t:"四个入口", en:"Four Doors into the Day", desc:"Explore turns taxonomy into colour: four soft-cornered tiles — terracotta, olive, slate blue and brick red — carry white type and a faint diagonal sheen above quiet collection rows. Navigation becomes a set of doors, and each colour a room in the same calm house. Choosing a category feels like choosing a mood.", img:"assets/works/detail/25.webp", ar:0.462 },
+  { t:"细读一个早晨", en:"Reading a Morning Closely", desc:"The guide opens like a page from a quiet magazine: unmade linen washed in window light, then title, byline and a short checklist of small needs, ticked in muted green. Generous margins keep the reading line pure. Knowledge is framed as a keepsake — the save button waits below like a bookmark.", img:"assets/works/detail/26.webp", ar:0.462 },
+  { t:"存给慢一点的日子", en:"Saved for a Slower Day", desc:"A saved list keeps its promises in rows: thumbnail, category, title and a small green bookmark, each entry stamped with its own quiet timestamp. Segmented filters and two collection cards add order without weight. The screen becomes a shelf of postponed pleasures, patiently waiting for a slower day.", img:"assets/works/detail/27.webp", ar:0.462 },
+  { t:"一个读者的自画像", en:"The Reader, Collected", desc:"Profile as self-portrait: an avatar and email, three counting numbers — saved, collections, following — and one deep-green card carrying the product's promise, closed by small orderly preference rows. No photograph softens it. Identity here is quantitative and calm: a life measured in what one chose to keep.", img:"assets/works/detail/28.webp", ar:0.462 },
+  { t:"住进一把椅子之前", en:"Before You Move In", desc:"A furniture app pitched in five floating screens on black: catalogue cards, a violet neon room with a purple armchair, a product detail, a feature grid and a wireframe room awaiting furniture. Placeholder text betrays its concept-stage nature. The promise is spatial: rehearse a life before buying the chair.", img:"assets/works/detail/29.webp", ar:0.750 },
+  { t:"毛孩子的主页", en:"A Home Full of Paws", desc:"A pet community app centred on a corgi: profile card, glossy clay-rendered mascot, icon banners and a friend feed, floating above a tilted cascade of sibling screens in blue and apricot. Soft 3D rendering and placeholder text mark the concept. Here the pet holds the account, and cuteness is the interface.", img:"assets/works/detail/30.webp", ar:0.554 },
+  { t:"负重自白", en:"Who I Am", desc:"A young trekker faces the camera under hard studio light, chartreuse shell and olive pack splitting the frame into two greens. Distressed print texture, scratched edges and a handwritten caption overlay the photoreal portrait. Gear becomes identity: the declaration is worn on the back, not spoken aloud.", img:"assets/works/detail/31.webp", ar:0.562 },
+  { t:"群鸟离纸", en:"Ascending in Halftone", desc:"A stencil-printed flock lifts through a tall grey frame: pale cyan birds rendered in visible halftone dots, swirling upward and dissolving into pure grain at the bottom, woodgrain breathing through the ink. Take-off is frozen mid-air — freedom and disappearance written in the same dissolving dot pattern.", img:"assets/works/detail/32.webp", ar:0.554 },
+  { t:"从一叶到一盏", en:"From Leaf to Cup", desc:"An ink-block diagram of tea's whole life: leaf, mountain, terraced fields, a picking hand, a rolling worker, bowl and pot circling the central character cha with one red seal. Coarse carved edges and stencil grain on paper white hold the light. A single word keeps the cycle, from hillside to cup.", img:"assets/works/detail/33.webp", ar:1.000 },
+  { t:"钟声失真", en:"The Pink Church, Half-Remembered", desc:"A gothic pink church — Da Lat's landmark silhouette — stands intact while horizontal smears drag its flanks into static, as if the memory were losing signal. Aged postcard paper, muted rose against grey-teal. Travel reduced to a cached image: the tower holds, and the rest is weather.", img:"assets/works/detail/34.webp", ar:0.562 },
+];
+const id = Math.min(Math.max(parseInt(new URLSearchParams(location.search).get("id")) || 1, 1), WORKS.length);
+const w = WORKS[id - 1];
+document.title = w.t + " · 我的作品集";
+const ar = w.ar || 0.75;
+const poster = document.getElementById("poster");
+poster.style.setProperty("--ar", ar);
+poster.innerHTML = `<img src="${w.img}" alt="${w.t}" decoding="async">`;
+
+/* 画框宽度按图片比例自适应 —— 作品里横构图(1.78)、竖长图(0.46)、方图都有，
+   写死一个宽度的话横图会小得看不清、竖图会顶出屏幕。
+   约束：高度不超过视口的 58%，宽度不超过视口的 92%。 */
+const mount = document.querySelector(".mount");
+function fitMount(){
+  const maxH = Math.min(window.innerHeight * 0.68, 860);
+  const maxW = Math.min(window.innerWidth * 0.92, 1040);
+  let wpx = Math.min(maxW, maxH * ar);
+  wpx = Math.max(wpx, 220);
+  mount.style.width = Math.round(wpx) + "px";
+}
+fitMount();
+window.addEventListener("resize", fitMount);
+document.getElementById("no").textContent     = "№ " + String(id).padStart(2, "0");
+document.getElementById("lb").textContent     = w.t;
+document.getElementById("num").textContent    = "WORK " + String(id).padStart(2, "0") + " / " + WORKS.length;
+// 底部铭牌跟着作品数量走，增减作品时不用手改
+const ONES  = ["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine"];
+const TEENS = ["Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+const TENS  = ["", "", "Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+const spell = n => n < 10 ? ONES[n] : n < 20 ? TEENS[n - 10]
+                    : TENS[(n / 10) | 0] + (n % 10 ? "-" + ONES[n % 10] : "");
+document.getElementById("plaqueBot").textContent = spell(WORKS.length) + " Pieces";
+document.getElementById("title").textContent  = w.t;
+document.getElementById("en").textContent     = w.en;
+document.getElementById("wmText").textContent = w.en.toUpperCase();
+document.getElementById("vno").textContent    = String(id).padStart(2, "0") + " / " + WORKS.length;
+document.getElementById("vtitle").textContent = w.t;
+document.getElementById("ven").textContent    = w.en;
+document.getElementById("desc").textContent   = w.desc || "暂无简介。";
+document.getElementById("prev").href = "work.html?id=" + (id === 1 ? WORKS.length : id - 1);
+document.getElementById("next").href = "work.html?id=" + (id === WORKS.length ? 1 : id + 1);
+</script>
+</body>
+</html>

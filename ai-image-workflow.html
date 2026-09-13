@@ -1,0 +1,2190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="dark">
+<title>AI 图像创作流程 · 标准化迭代工作流 | AI Image Workflow</title>
+<meta name="description" content="通过交互式网页展示一套标准化、可复用、可迭代的 AI 图像制作工作流：参考素材锚定、统一风格、提示词配置、初次生成、迭代优化与系列化输出。">
+<link rel="stylesheet" href="assets/fonts/fonts.css">
+<style>
+/* ==========================================================================
+   finesse · register=brand · A=ink-gold-glass · B=geometric/400-mono · C=workflow-pipeline
+   D=CSS/vanilla-js · E=control-surface · SOUL=7 SPECTACLE=6 DENSITY=6
+   标准化迭代 AI 图像创作流程 · 单文件作品集展示页
+   ========================================================================== */
+
+/* ---------- 令牌（全文唯一允许出现裸 hex 的地方） ---------- */
+:root{
+  --page:#0A0B0D;
+  --panel:#111419;
+  --panel-2:#171B21;
+  --panel-3:#1C2129;
+  --ink-1:#F5F1E8;
+  --ink-2:#A9ADB5;
+  --ink-3:#7A7F89;
+  --en-ink:#DFC48D;          /* 英文释义高亮色：与相邻中文同字号 */
+  --gold:#D8AE5A;
+  --gold-soft:#E6C585;
+  --gold-bg:rgba(216,174,90,.12);
+  --gold-line:rgba(216,174,90,.34);
+  --border:rgba(245,241,232,.16);
+  --border-soft:rgba(245,241,232,.09);
+  --ok:#A5C98B;
+  --warn:#D9A85B;
+  --bad:#C98383;
+  --nav-h:66px;
+
+  --font-display:'futurist','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --font-body:'easeStandard','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --font-mono:'Geist Mono',Consolas,'SFMono-Regular',Menlo,monospace;
+
+  --ease:cubic-bezier(.22,.61,.21,1);
+  --r-sm:8px; --r-md:12px; --r-lg:18px; --r-xl:24px;
+  --z-nav:1000; --z-progress:1010; --z-modal:1200; --z-toast:1300;
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+html,body{overflow-x:clip}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
+body{
+  background:var(--page);
+  color:var(--ink-1);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.7;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+body.is-locked{overflow:hidden}
+
+::selection{background:rgba(216,174,90,.28);color:var(--ink-1)}
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:4px}
+
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+button{font-family:inherit;cursor:pointer;background:none;border:none;color:inherit}
+.mono{font-family:var(--font-mono)}
+
+.wrap{width:min(1280px,calc(100% - 48px));margin-inline:auto}
+@media (max-width:720px){.wrap{width:calc(100% - 32px)}}
+
+/* ==========================================================================
+   双语排版系统（全站统一规则）
+   --------------------------------------------------------------------------
+   中文为主，英文释义紧随其后（同行或另起一行），两者【同字号】，
+   英文使用 --en-ink 暖金色高亮，便于快速区分与阅读。
+     <span class="en">English</span>      同行，跟在中文右侧
+     <span class="en blk">English</span>  另起一行，放在中文下方
+   不要给 .en 单独写 font-size —— 同字号是这套排版的前提。
+   ========================================================================== */
+.en{color:var(--en-ink)}
+.en.blk{display:block}
+/* 金色底按钮上的英文释义改用深色，保证对比度 */
+.btn-primary .en,.btn-sm.gold .en,.btn-autoplay.playing .en,.btn-nav.playing .en{color:rgba(21,18,8,.74)}
+/* 中英混排时的间距：中文与英文之间留一个字的呼吸 */
+.zh-en-gap,.en.ml{margin-left:.5em}
+
+/* 段落 / 小标签 */
+.eyebrow{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;
+  color:var(--gold);display:inline-flex;align-items:center;gap:12px;flex-wrap:wrap;
+}
+.eyebrow::before{content:'';width:26px;height:1px;background:var(--gold-line);flex:0 0 auto}
+.eyebrow .en{letter-spacing:.2em;text-transform:uppercase}
+.sec-head{max-width:920px}
+/* 中文主标题 —— 整块唯一的视觉重心 */
+.sec-head .zh{font-family:var(--font-display);font-size:clamp(26px,3.2vw,37px);line-height:1.18;letter-spacing:-.01em;margin:14px 0 0;color:var(--ink-1)}
+/* 英文副题：缩成一条精致的说明带。
+   原来写成 `.sec-head .en`（后代选择器）且与中文同字号 43px —— 于是
+   .eyebrow .en 和 .desc .en 全被一起撑大，英文反而盖过中文主标题。
+   这里改成「直接子选择器 + 小字号」，从根上断掉这个串扰。 */
+.sec-head>.en{font-family:var(--font-display);font-size:clamp(11.5px,1.02vw,13.5px);line-height:1.5;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--en-ink);display:block;
+  margin-top:15px;padding-top:13px;border-top:1px solid var(--gold-line)}
+/* 说明正文：中文保持正文大小，英文降一级当注解，不再抢戏 */
+.sec-head .desc{color:var(--ink-2);margin-top:14px;max-width:760px;font-size:15.5px;line-height:1.8}
+.sec-head .desc .en{display:block;margin-top:9px;max-width:760px;
+  font-family:var(--font-body);font-size:13.5px;line-height:1.75;letter-spacing:0;
+  text-transform:none;color:var(--ink-3)}
+
+/* ==========================================================================
+   顶部滚动进度条
+   ========================================================================== */
+#progress{
+  position:fixed;top:0;left:0;height:2px;width:100%;
+  background:linear-gradient(90deg,var(--gold),var(--gold-soft));
+  transform-origin:0 50%;transform:scaleX(0);
+  z-index:var(--z-progress);pointer-events:none;
+}
+
+/* ==========================================================================
+   顶部导航栏
+   ========================================================================== */
+header{
+  position:fixed;top:0;left:0;right:0;height:var(--nav-h);
+  z-index:var(--z-nav);
+  transition:background .4s var(--ease),border-color .4s var(--ease),backdrop-filter .4s var(--ease);
+  border-bottom:1px solid transparent;
+}
+header.scrolled{
+  background:rgba(10,11,13,.72);
+  -webkit-backdrop-filter:blur(16px) saturate(1.2);backdrop-filter:blur(16px) saturate(1.2);
+  border-bottom-color:var(--border-soft);
+}
+.nav{height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:13px;letter-spacing:.16em;font-weight:600;white-space:nowrap}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px rgba(216,174,90,.7)}
+.brand .brand-en{color:var(--ink-2);font-weight:400}
+.nav-links{display:flex;align-items:center;gap:2px}
+.nav-links a{
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.02em;color:var(--ink-1);
+  padding:9px 11px;border-radius:8px;position:relative;transition:color .25s var(--ease);
+  white-space:nowrap;
+}
+.nav-links a .en{margin-left:.45em}
+.nav-links a:hover{color:var(--gold-soft)}
+.nav-links a.active{color:var(--gold)}
+.nav-links a.active .en{color:var(--gold)}
+.nav-links a.active::after{
+  content:'';position:absolute;left:11px;right:11px;bottom:2px;height:1px;background:var(--gold-line);
+}
+.nav-cta{
+  font-family:var(--font-mono);font-size:12.5px;letter-spacing:.05em;color:var(--ink-1);
+  padding:9px 16px;border:1px solid var(--gold-line);border-radius:999px;background:var(--gold-bg);
+  transition:background .25s var(--ease),border-color .25s var(--ease);white-space:nowrap;
+}
+.nav-cta:hover{background:rgba(216,174,90,.2);border-color:var(--gold)}
+
+/* 汉堡按钮 */
+.burger{display:none;width:44px;height:44px;border-radius:10px;border:1px solid var(--border);align-items:center;justify-content:center;flex-direction:column;gap:5px}
+.burger span{display:block;width:18px;height:1.5px;background:var(--ink-1);transition:transform .3s var(--ease),opacity .3s var(--ease)}
+.burger[aria-expanded="true"] span:nth-child(1){transform:translateY(6.5px) rotate(45deg)}
+.burger[aria-expanded="true"] span:nth-child(2){opacity:0}
+.burger[aria-expanded="true"] span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
+
+/* 移动端全屏菜单 */
+.mobile-menu{
+  position:fixed;inset:0;z-index:calc(var(--z-nav) - 1);background:rgba(10,11,13,.97);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);
+  display:flex;flex-direction:column;justify-content:center;padding:40px;
+  opacity:0;visibility:hidden;transition:opacity .35s var(--ease),visibility .35s;
+}
+.mobile-menu[hidden]{display:none}
+.mobile-menu.open{opacity:1;visibility:visible}
+.mobile-menu a{
+  font-family:var(--font-display);font-size:26px;line-height:1.15;padding:14px 0;color:var(--ink-1);
+  border-bottom:1px solid var(--border-soft);display:flex;align-items:baseline;gap:14px;
+}
+.mobile-menu a .idx{font-family:var(--font-mono);font-size:13px;color:var(--gold)}
+/* 英文与中文同字号，暖金色高亮 */
+.mobile-menu a .en{display:block;font-family:var(--font-mono);font-size:26px;color:var(--en-ink);text-transform:none}
+.mobile-menu a:hover{color:var(--gold)}
+
+/* 双语导航更长，所以比正文更早收成汉堡菜单 */
+@media (max-width:1060px){
+  .nav-links,.nav-cta{display:none}
+  .burger{display:flex}
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+#hero{position:relative;min-height:100svh;display:flex;align-items:center;padding:calc(var(--nav-h) + 40px) 0 60px;overflow:hidden}
+.hero-bg{position:absolute;inset:0;z-index:0;overflow:hidden}
+.hero-bg video,.hero-bg img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.2;filter:saturate(.85)}
+.hero-scrim{position:absolute;inset:0;z-index:1;
+  background:
+    radial-gradient(120% 80% at 78% 30%,rgba(216,174,90,.14),transparent 55%),
+    linear-gradient(180deg,rgba(10,11,13,.72) 0%,rgba(10,11,13,.55) 45%,var(--page) 100%);
+}
+.hero-glow{position:absolute;z-index:1;width:520px;height:520px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(216,174,90,.16),transparent 65%);filter:blur(6px);
+  top:6%;right:-120px;will-change:transform}
+.hero-grain{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")}
+.hero-inner{position:relative;z-index:2;display:grid;grid-template-columns:1.08fr .92fr;gap:52px;align-items:center;width:100%}
+.hero-copy .eyebrow{margin-bottom:22px}
+/* 中英主标题同字号（双语锁定），所以整体字号比单语版收敛一档 */
+.hero-title{font-family:var(--font-display);font-size:clamp(25px,3.4vw,42px);line-height:1.14;letter-spacing:-.01em;overflow-wrap:anywhere}
+.hero-title .accent{color:var(--gold)}
+.hero-en{font-family:var(--font-display);font-size:clamp(25px,3.4vw,42px);line-height:1.14;letter-spacing:.005em;
+  text-transform:uppercase;color:var(--en-ink);margin:8px 0 22px;overflow-wrap:anywhere}
+.hero-en .l2{color:var(--en-ink)}
+.hero-desc{color:var(--ink-2);max-width:640px;font-size:15.5px}
+.hero-desc .en{display:block;margin-top:7px}
+.hero-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:34px}
+.btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:13.5px;letter-spacing:.05em;
+  padding:14px 26px;border-radius:999px;transition:transform .25s var(--ease),background .25s var(--ease),border-color .25s var(--ease),box-shadow .25s var(--ease)}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--gold);color:#151208;font-weight:600}
+.btn-primary:hover{background:var(--gold-soft);box-shadow:0 10px 30px -8px rgba(216,174,90,.5)}
+.btn-ghost{border:1px solid var(--border);color:var(--ink-1)}
+.btn-ghost:hover{border-color:var(--gold-line);background:var(--gold-bg)}
+.btn .arr{transition:transform .25s var(--ease)}
+.btn:hover .arr{transform:translateX(3px)}
+
+/* Hero 右侧视觉 */
+.hero-visual{position:relative}
+.hero-frame{position:relative;border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;
+  background:var(--panel);box-shadow:0 40px 90px -40px rgba(0,0,0,.85)}
+/* 主视觉为 3:4 竖构图：向上取景，避免 1:1 裁切把人物头部切掉 */
+.hero-frame img{width:100%;aspect-ratio:1/1;object-fit:cover;object-position:center 10%}
+.hero-frame::after{content:'';position:absolute;inset:0;background:linear-gradient(200deg,transparent 55%,rgba(10,11,13,.6));pointer-events:none}
+.hero-frame .corner{
+  position:absolute;top:14px;left:14px;z-index:2;display:flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;color:var(--ink-1);
+  background:rgba(10,11,13,.55);border:1px solid var(--border);border-radius:999px;padding:7px 12px;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+}
+.hero-frame .corner .tick{width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.hero-frame .caption{position:absolute;bottom:0;left:0;right:0;z-index:2;padding:18px 20px;
+  background:linear-gradient(0deg,rgba(10,11,13,.85),transparent);display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.hero-frame .caption .cap-zh{font-size:14px;font-weight:600}
+.hero-frame .caption .cap-en{font-family:var(--font-mono);font-size:13px;letter-spacing:.03em;color:var(--en-ink)}
+.hero-float{position:absolute;z-index:3;background:rgba(17,20,25,.82);border:1px solid var(--border);
+  border-radius:var(--r-md);padding:12px 16px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+  box-shadow:0 18px 50px -20px rgba(0,0,0,.7)}
+.hero-float .f-lab{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--ink-3)}
+.hero-float .f-lab .en{letter-spacing:.16em;text-transform:uppercase}
+.hero-float .f-val{font-family:var(--font-mono);font-size:14px;color:var(--gold-soft);margin-top:3px}
+.hero-float.f1{top:34px;right:-16px}
+.hero-float.f2{bottom:44px;left:-18px}
+
+/* Hero 指标 */
+.hero-metrics{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin-top:64px;border-top:1px solid var(--border-soft)}
+.metric{padding:26px 20px 0;border-left:1px solid var(--border-soft)}
+.metric:first-child{border-left:none;padding-left:0}
+.metric .m-num{font-family:var(--font-mono);font-size:12px;color:var(--gold);letter-spacing:.1em}
+.metric .m-en{font-size:15px;font-weight:600;color:var(--ink-1);margin-top:8px;line-height:1.35}
+.metric .m-en .en{display:block;font-family:var(--font-mono);font-size:15px;font-weight:400;margin-top:2px}
+
+/* 滚动提示 */
+.scroll-hint{position:absolute;z-index:2;left:50%;bottom:20px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--ink-3)}
+.scroll-hint .s-zh{font-size:11.5px;color:var(--ink-2)}
+.scroll-hint .s-en{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.14em;color:var(--en-ink);text-transform:uppercase}
+.scroll-hint .wheel{width:22px;height:34px;border:1px solid var(--border);border-radius:12px;position:relative;margin-top:4px}
+.scroll-hint .wheel::after{content:'';position:absolute;left:50%;top:6px;width:3px;height:7px;border-radius:3px;background:var(--gold);transform:translateX(-50%);animation:wheel 1.8s var(--ease) infinite}
+@keyframes wheel{0%{opacity:0;transform:translate(-50%,0)}30%{opacity:1}100%{opacity:0;transform:translate(-50%,12px)}}
+@media (prefers-reduced-motion:reduce){.scroll-hint .wheel::after{animation:none;opacity:.7}}
+
+@media (max-width:920px){
+  .hero-inner{grid-template-columns:1fr;gap:40px}
+  .hero-visual{max-width:460px;margin-inline:auto}
+  .hero-metrics{grid-template-columns:1fr;gap:0}
+  .metric{border-left:none;border-top:1px solid var(--border-soft);padding:18px 0}
+  .metric:first-child{border-top:none;padding-top:0}
+  .scroll-hint{display:none}
+  .hero-float.f1{right:0;top:-14px}
+  .hero-float.f2{left:0;bottom:-14px}
+}
+
+/* ==========================================================================
+   进入视口动画
+   ========================================================================== */
+.reveal{opacity:0;transform:translateY(26px)}
+.reveal.in{opacity:1;transform:translateY(0);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
+
+/* 步骤切换动画：淡入 + 轻微上移 + 图片交叉淡化（由 renderStep 加 .anim 触发） */
+.stage.anim .step{animation:stageIn .5s var(--ease) both}
+.stage.anim .step-right{animation:imgIn .7s var(--ease) both}
+@keyframes stageIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes imgIn{from{opacity:0}to{opacity:1}}
+
+/* ==========================================================================
+   通用 section
+   ========================================================================== */
+section{position:relative;padding:110px 0}
+@media (max-width:720px){section{padding:72px 0}}
+.panel{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--r-lg)}
+
+/* ==========================================================================
+   时间轴 + 步骤面板
+   ========================================================================== */
+#workflow{background:linear-gradient(180deg,var(--page) 0%,#0C0E11 100%)}
+.tl-top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;margin-bottom:38px}
+.tl-top .tl-pipe{font-family:var(--font-mono);font-size:12px;letter-spacing:.24em;color:var(--gold);text-transform:uppercase}
+.tl-top .tl-count{font-family:var(--font-mono);font-size:13px;color:var(--ink-3);letter-spacing:.08em}
+.tl-top .tl-count b{color:var(--ink-1);font-weight:600}
+
+/* 横向时间轴 */
+.timeline{display:grid;grid-template-columns:repeat(6,1fr);gap:0;position:relative}
+.timeline::before{content:'';position:absolute;top:15px;left:calc(100% / 12);right:calc(100% / 12);height:1px;background:var(--border-soft)}
+.timeline .tl-progress{position:absolute;top:15px;left:calc(100% / 12);height:1px;background:var(--gold-line);transition:width .5s var(--ease);z-index:1}
+.tl-node{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;gap:16px;padding:0 6px;text-align:center;background:none}
+.tl-node .t-dot{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);background:var(--page);
+  display:flex;align-items:center;justify-content:center;transition:border-color .3s var(--ease),background .3s var(--ease),box-shadow .3s var(--ease)}
+.tl-node .t-dot i{width:8px;height:8px;border-radius:50%;background:var(--ink-3);transition:background .3s var(--ease),transform .3s var(--ease)}
+.tl-node .t-num{font-family:var(--font-mono);font-size:12px;color:var(--ink-3);letter-spacing:.08em;transition:color .3s var(--ease)}
+.tl-node .t-zh{font-size:13px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+/* 英文步骤名与中文同字号，暖金色高亮 */
+.tl-node .t-en{font-family:var(--font-mono);font-size:13px;letter-spacing:.01em;color:var(--en-ink);line-height:1.25;overflow-wrap:anywhere}
+.tl-node .t-status{font-family:var(--font-mono);font-size:9px;letter-spacing:.2em;color:var(--ink-3);text-transform:uppercase;min-height:12px}
+.tl-node:hover .t-zh{color:var(--gold-soft)}
+.tl-node.is-done .t-dot{border-color:var(--gold);background:var(--gold)}
+.tl-node.is-done .t-dot i{background:#151208}
+.tl-node.is-done .t-num{color:var(--gold)}
+.tl-node.is-current .t-dot{border-color:var(--gold);background:var(--page);box-shadow:0 0 0 5px var(--gold-bg),0 0 20px rgba(216,174,90,.45)}
+.tl-node.is-current .t-dot i{background:var(--gold);transform:scale(1.25)}
+.tl-node.is-current .t-num{color:var(--gold)}
+.tl-node.is-current .t-zh{color:var(--gold-soft)}
+.tl-node.is-current .t-status{color:var(--gold)}
+
+@media (max-width:900px){
+  .timeline{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:8px;padding:4px 2px 14px;scrollbar-width:none}
+  .timeline::-webkit-scrollbar{display:none}
+  .timeline::before,.timeline .tl-progress{display:none}
+  .tl-node{min-width:120px;scroll-snap-align:center;flex:0 0 auto}
+}
+
+/* ---------- 步骤面板 ---------- */
+.stage{background:var(--panel);border:1px solid var(--border-soft);border-radius:var(--r-xl);overflow:hidden;position:relative}
+.stage-top{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border-soft);background:var(--panel-2)}
+.stage-top .st-id{font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;color:var(--ink-3)}
+.stage-top .st-id b{color:var(--gold);font-weight:600}
+.stage-top .st-state{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;color:var(--ok);display:flex;align-items:center;gap:8px}
+.stage-top .st-state::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.step{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.step-left{padding:44px 44px 40px;border-right:1px solid var(--border-soft)}
+.step-right{padding:40px 44px;background:linear-gradient(160deg,var(--panel-2),var(--panel))}
+.step-num{font-family:var(--font-mono);font-size:13px;color:var(--gold);letter-spacing:.12em}
+/* 中英步骤标题同字号 */
+.step-title{font-family:var(--font-display);font-size:clamp(23px,2.8vw,32px);line-height:1.14;letter-spacing:-.01em;margin:10px 0 0;overflow-wrap:anywhere}
+/* 步骤英文标题：原来与中文同字号(23-32px)，现降为标题下的注解行 */
+.step-title-en{font-family:var(--font-display);font-size:clamp(11.5px,1.02vw,13.5px);line-height:1.5;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--en-ink);overflow-wrap:anywhere;margin-top:8px;opacity:.9}
+.step-desc{color:var(--ink-2);margin-top:20px;font-size:15px}
+.step-desc .en{display:block;margin-top:7px}
+.step-goal{margin-top:22px;padding:16px 18px;border:1px solid var(--gold-line);border-left:2px solid var(--gold);border-radius:var(--r-md);background:var(--gold-bg)}
+.step-goal .g-lab{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;color:var(--gold);margin-bottom:8px}
+.step-goal .g-val{font-size:15px}
+.step-goal .g-val .en{display:block;margin-top:4px}
+.io{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+.io .io-box h4{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;color:var(--ink-3);margin-bottom:8px}
+.io .io-box ul{list-style:none}
+.io .io-box li{font-size:13.5px;color:var(--ink-2);padding:4px 0 4px 16px;position:relative}
+.io .io-box li .en{display:block;margin-top:1px}
+.io .io-box li::before{content:'';position:absolute;left:0;top:11px;width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.io .io-box.in li::before{background:var(--gold)}
+.io .io-box.out li::before{background:var(--ok)}
+.tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.tag{font-family:var(--font-mono);font-size:11px;letter-spacing:.06em;color:var(--ink-2);padding:6px 12px;border:1px solid var(--border);border-radius:999px;white-space:nowrap}
+.tag .en{letter-spacing:.12em}
+.step-note{margin-top:22px;font-size:13.5px;color:var(--ink-3);border-top:1px dashed var(--border-soft);padding-top:16px}
+.step-note .en{display:block;margin-top:5px}
+
+/* 案例区（右侧）通用 */
+.case-label{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;color:var(--gold);margin-bottom:14px}
+.case-caption{margin-top:14px;font-size:13px;color:var(--ink-3);line-height:1.65}
+.case-caption .en{display:block;margin-top:4px}
+.case-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+.btn-sm{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;
+  padding:11px 18px;border-radius:10px;border:1px solid var(--border);color:var(--ink-1);transition:border-color .25s var(--ease),background .25s var(--ease)}
+.btn-sm:hover{border-color:var(--gold-line);background:var(--gold-bg)}
+.btn-sm.gold{background:var(--gold);color:#151208;border-color:var(--gold);font-weight:600}
+.btn-sm.gold:hover{background:var(--gold-soft)}
+
+/* 步骤一：参考图连线组 */
+.ref-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.ref-cell{position:relative;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--panel-3)}
+.ref-cell .r-img{width:100%;aspect-ratio:4/5;object-fit:cover;transition:transform .5s var(--ease)}
+.ref-cell:hover .r-img{transform:scale(1.04)}
+.ref-cell .r-hover{position:absolute;inset:auto 0 0 0;padding:10px 12px;background:linear-gradient(0deg,rgba(10,11,13,.9),transparent);
+  font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:var(--ink-1);text-transform:uppercase;opacity:.85}
+.ref-cell .r-tag{position:absolute;top:10px;left:10px;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;background:rgba(10,11,13,.66);border:1px solid var(--border);padding:4px 9px;border-radius:999px;color:var(--gold);max-width:calc(100% - 20px)}
+.ref-cell::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--gold-line);opacity:0;transition:opacity .3s}
+.ref-cell:hover::after{opacity:1}
+
+/* 系列网格：六张画面画幅不一（3:4 / 9:16 / 16:9），用 contain 保证构图不被裁掉 */
+.ref-grid--series .ref-cell{background:linear-gradient(160deg,var(--panel-2),#0E1116)}
+.ref-grid--series .r-img{object-fit:contain}
+.ref-grid--series .r-hover{text-transform:none;letter-spacing:.06em}
+
+/* 系列画面本身就是按钮：整格可点，打开大图预览 */
+.ref-cell--btn{display:block;width:100%;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  transition:border-color .25s var(--ease),transform .25s var(--ease)}
+.ref-cell--btn:hover{border-color:var(--gold-line)}
+.ref-cell--btn:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.ref-link{display:flex;align-items:center;justify-content:center;gap:0;margin:4px 0 2px}
+.ref-link .ln{flex:1;height:1px;background:var(--border-soft);position:relative}
+.ref-link .ln::after{content:'';position:absolute;right:-3px;top:-2.5px;width:6px;height:6px;border-radius:50%;background:var(--ink-3)}
+.ref-link .lbl{font-family:var(--font-mono);font-size:9px;letter-spacing:.14em;color:var(--ink-3);padding:0 8px;text-transform:uppercase;white-space:nowrap}
+
+/* 占位组件 */
+.ph{position:relative;border:1px dashed var(--border);border-radius:var(--r-md);background:repeating-linear-gradient(45deg,var(--panel-2),var(--panel-2) 10px,var(--panel) 10px,var(--panel) 20px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:24px;text-align:center;overflow:hidden}
+.ph .ph-icon{font-family:var(--font-mono);font-size:22px;color:var(--gold)}
+.ph .ph-name{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;color:var(--ink-2);word-break:break-all}
+.ph .ph-path{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-3);word-break:break-all}
+.ph .ph-note{font-family:var(--font-mono);font-size:9px;letter-spacing:.18em;color:var(--gold);text-transform:uppercase;margin-top:2px}
+.ph.aspect{aspect-ratio:4/5;width:100%}
+.ph.aspect-1{aspect-ratio:1/1;width:100%}
+
+/* 步骤二：Style DNA */
+.dna{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.dna-item{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border-soft);border-radius:10px;background:var(--panel-2);font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-2)}
+.dna-item .di-dot{width:6px;height:6px;border-radius:50%;background:var(--gold);flex:0 0 auto}
+.dna-item:hover{border-color:var(--gold-line);color:var(--ink-1)}
+
+/* 步骤三：提示词结构模块 */
+.pm{display:flex;flex-direction:column;gap:8px}
+.pm-item{border:1px solid var(--border-soft);border-radius:10px;background:var(--panel-2);overflow:hidden}
+.pm-item .pm-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 16px;text-align:left;transition:background .25s var(--ease)}
+.pm-item .pm-head:hover{background:var(--panel-3)}
+.pm-item .pm-key{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.12em;color:var(--gold)}
+.pm-item .pm-chev{font-family:var(--font-mono);font-size:12px;color:var(--ink-3);transition:transform .3s var(--ease)}
+.pm-item.open .pm-chev{transform:rotate(180deg)}
+.pm-item .pm-body{max-height:0;overflow:hidden;transition:max-height .4s var(--ease)}
+.pm-item .pm-body-in{padding:8px 16px 14px;font-size:13px;line-height:1.65;color:var(--ink-2);border-top:1px solid var(--border-soft)}
+.pm-item .pm-body-in .en{display:block;margin-top:4px}
+.pm-item.open .pm-body{max-height:160px}
+
+/* 步骤四：问题记录 */
+.issues{display:flex;flex-direction:column;gap:8px}
+.issue{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;border:1px solid var(--border-soft);border-radius:10px;background:var(--panel-2)}
+.issue .i-name{font-size:13.5px;line-height:1.35}
+.issue .i-name .en{display:block;margin-top:2px}
+.issue .i-status{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;padding:5px 10px;border-radius:999px;border:1px solid var(--border);white-space:nowrap}
+.issue .i-status.st-check{color:var(--ink-2)}
+.issue .i-status.st-fix{color:var(--warn);border-color:rgba(217,168,91,.4);background:rgba(217,168,91,.08)}
+.issue .i-status.st-ok{color:var(--ok);border-color:rgba(165,201,139,.4);background:rgba(165,201,139,.08)}
+
+/* ---------- 对比滑块 ---------- */
+.compare{width:100%}
+.compare-stage{position:relative;width:100%;aspect-ratio:3/4;overflow:hidden;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel-2);touch-action:none;cursor:ew-resize;user-select:none}
+@media (min-width:900px){.compare-stage{min-height:500px}}
+.compare-layer{position:absolute;inset:0}
+.compare-layer img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.compare-layer--before{clip-path:inset(0 calc(100% - var(--pos,50%)) 0 0);z-index:2}
+.compare-layer--after{z-index:1}
+.compare-handle{position:absolute;top:0;bottom:0;left:var(--pos,50%);width:44px;transform:translateX(-50%);z-index:3;cursor:ew-resize;background:transparent}
+.compare-handle::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:2px;transform:translateX(-50%);background:var(--gold);box-shadow:0 0 12px rgba(216,174,90,.5)}
+.compare-handle .ch-dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;
+  background:var(--panel-2);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;gap:3px;color:var(--gold);font-size:13px;box-shadow:0 6px 20px -4px rgba(0,0,0,.6)}
+.compare-tags{position:absolute;top:14px;left:14px;right:14px;display:flex;justify-content:space-between;z-index:4;pointer-events:none}
+.compare-tag{font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:6px 11px;border-radius:999px;background:rgba(10,11,13,.6);border:1px solid var(--border);color:var(--ink-1);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.compare-tag.t-after{color:var(--gold);border-color:var(--gold-line)}
+.compare-hint{margin-top:10px;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;color:var(--ink-3);display:flex;gap:16px;flex-wrap:wrap}
+.compare-hint kbd{font-family:var(--font-mono);font-size:9.5px;border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--ink-2)}
+
+/* Iteration Log */
+.ilog{margin-top:22px}
+.ilog .ilog-title{font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;margin-bottom:12px}
+.ilog-round{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:14px 0;border-top:1px solid var(--border-soft)}
+@media (max-width:560px){.ilog-round{grid-template-columns:1fr;gap:6px}}
+.ilog-round .r-tag{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.06em;color:var(--gold-soft);line-height:1.45}
+.ilog-round .r-tag .en{display:block}
+.ilog-round ul{list-style:none}
+.ilog-round li{font-size:13.5px;color:var(--ink-2);padding:4px 0 4px 18px;position:relative;line-height:1.4}
+.ilog-round li .en{display:block;margin-top:2px}
+.ilog-round li::before{content:'✓';position:absolute;left:0;top:3px;color:var(--ok);font-size:12px}
+
+/* ---------- 步骤底部控件 ---------- */
+.step-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-top:1px solid var(--border-soft);background:var(--panel-2)}
+.sc-group{display:flex;align-items:center;gap:12px}
+.btn-nav{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12.5px;letter-spacing:.05em;padding:13px 20px;border-radius:12px;border:1px solid var(--border);color:var(--ink-1);transition:border-color .25s var(--ease),background .25s var(--ease),opacity .25s}
+.btn-nav:hover:not(:disabled){border-color:var(--gold-line);background:var(--gold-bg)}
+.btn-nav:disabled{opacity:.34;cursor:not-allowed}
+/* 上一步 / 自动播放 / 下一步：中文主行 + 英文副行，同字号 */
+.btn-nav .nv-sub{display:block;font-size:12.5px;letter-spacing:.06em;color:var(--en-ink);margin-top:1px}
+.btn-nav .nv-main{font-size:12.5px}
+.btn-autoplay{position:relative;overflow:hidden}
+.btn-autoplay.playing{background:var(--gold);color:#151208;border-color:var(--gold);font-weight:600}
+.autoplay-fill{position:absolute;left:0;top:0;bottom:0;width:100%;background:rgba(216,174,90,.3);transform-origin:0 50%;transform:scaleX(0);pointer-events:none}
+.step-progress{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--ink-3);text-align:center}
+.step-progress b{color:var(--ink-1);font-weight:600}
+
+@media (max-width:900px){
+  .step{grid-template-columns:1fr}
+  .step-left{border-right:none;border-bottom:1px solid var(--border-soft);padding:30px 24px}
+  .step-right{padding:26px 24px}
+  .step-controls{flex-wrap:wrap;justify-content:center}
+  .sc-group{flex-wrap:wrap;justify-content:center}
+  .step-progress{width:100%;order:-1}
+}
+
+/* ==========================================================================
+   核心原理
+   ========================================================================== */
+#principle{background:var(--page)}
+.pr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:44px}
+.pr-card{position:relative;padding:34px 30px;border:1px solid var(--border-soft);border-radius:var(--r-lg);background:var(--panel);
+  transition:transform .35s var(--ease),border-color .35s var(--ease),box-shadow .35s var(--ease);overflow:hidden}
+.pr-card::before{content:'';position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 0%,rgba(216,174,90,.1),transparent 60%);opacity:0;transition:opacity .4s var(--ease)}
+.pr-card:hover{transform:translateY(-8px);border-color:var(--gold-line);box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.pr-card:hover::before{opacity:1}
+.pr-card .p-num{font-family:var(--font-mono);font-size:40px;line-height:1;color:var(--ink-3);transition:color .35s var(--ease)}
+.pr-card:hover .p-num{color:var(--gold)}
+/* 原理卡：中英标题同字号 */
+.pr-card .p-zh{font-family:var(--font-display);font-size:20px;line-height:1.22;margin:22px 0 0}
+.pr-card .p-en{font-family:var(--font-display);font-size:20px;line-height:1.22;letter-spacing:.005em;text-transform:uppercase;color:var(--en-ink)}
+.pr-card .p-desc{color:var(--ink-2);margin-top:16px;font-size:15px;line-height:1.45}
+.pr-card .p-desc .en{display:block;margin-top:3px}
+.pr-card .p-line{width:34px;height:2px;background:var(--gold);margin-top:20px;border-radius:2px;transition:width .35s var(--ease)}
+.pr-card:hover .p-line{width:56px}
+.pr-summary{max-width:900px;margin:56px auto 0;text-align:center;font-size:17px;line-height:1.9;color:var(--ink-2)}
+.pr-summary .hl{color:var(--gold-soft)}
+/* 英文释义与中文正文同字号 */
+.pr-summary .en{display:block;margin-top:10px;font-size:17px}
+@media (max-width:860px){.pr-grid{grid-template-columns:1fr}}
+
+/* ==========================================================================
+   对比区域（独立大区）
+   ========================================================================== */
+#comparison{background:linear-gradient(180deg,#0C0E11,var(--page))}
+.cmp-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:44px;align-items:center;margin-top:44px}
+@media (max-width:900px){.cmp-grid{grid-template-columns:1fr}}
+.cmp-side .cmp-title{font-family:var(--font-display);font-size:clamp(19px,2.2vw,25px);line-height:1.24}
+.cmp-side .cmp-title .en{display:block;margin-top:8px;font-family:var(--font-body);
+  font-size:clamp(12px,1.02vw,13.5px);line-height:1.6;letter-spacing:.02em;
+  text-transform:none;color:var(--ink-3);font-weight:400}
+.cmp-side .cmp-sub{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--gold);margin-bottom:12px}
+.cmp-side p{color:var(--ink-2);margin-top:16px;font-size:15px}
+.cmp-side p .en{display:block;margin-top:6px}
+.cmp-side .cmp-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:26px}
+.cmp-stat{border:1px solid var(--border-soft);border-radius:var(--r-md);padding:16px;background:var(--panel)}
+.cmp-stat .cs-num{font-family:var(--font-mono);font-size:22px;color:var(--gold)}
+.cmp-stat .cs-lab{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-3);margin-top:4px;line-height:1.45}
+.cmp-stat .cs-lab .en{display:block}
+
+/* ==========================================================================
+   系列输出
+   ========================================================================== */
+#series{background:var(--page)}
+.series-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:44px}
+.series-card{position:relative;border:1px solid var(--border-soft);border-radius:var(--r-lg);overflow:hidden;background:var(--panel);transition:transform .35s var(--ease),border-color .35s var(--ease)}
+.series-card:hover{transform:translateY(-6px);border-color:var(--gold-line)}
+/* 六张系列画幅不一（3:4 / 9:16 / 16:9）：contain + 深色衬底，保证构图完整不裁切 */
+.series-card .s-media{position:relative;aspect-ratio:4/5;overflow:hidden;background:linear-gradient(160deg,var(--panel-2),#0E1116)}
+.series-card .s-media img{width:100%;height:100%;object-fit:contain;transition:transform .6s var(--ease)}
+.series-card:hover .s-media img{transform:scale(1.04)}
+.series-card .s-idx{position:absolute;top:12px;left:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--gold);background:rgba(10,11,13,.6);border:1px solid var(--border);border-radius:999px;padding:4px 9px;opacity:0;transition:opacity .3s var(--ease)}
+.series-card:hover .s-idx{opacity:1}
+.series-card .s-info{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;flex-wrap:wrap}
+.series-card .s-name{font-size:15px;font-weight:600;line-height:1.3}
+.series-card .s-name .en{margin-left:.5em;font-weight:400}
+.series-card .s-sub{font-size:13px;color:var(--ink-3);margin-top:4px;line-height:1.35}
+.series-card .s-sub .en{margin-left:.45em}
+.series-card .s-view{flex:0 0 auto;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--gold);border:1px solid var(--gold-line);border-radius:999px;padding:7px 14px;transition:background .25s var(--ease);white-space:nowrap}
+.series-card:hover .s-view{background:var(--gold-bg)}
+@media (max-width:900px){.series-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.series-grid{grid-template-columns:1fr}}
+
+/* ==========================================================================
+   Footer / CTA / Contact
+   ========================================================================== */
+#contact{background:linear-gradient(180deg,var(--page),#0C0E11);border-top:1px solid var(--border-soft)}
+.cta{position:relative;overflow:hidden;border:1px solid var(--border-soft);border-radius:var(--r-xl);background:var(--panel);padding:clamp(40px,6vw,76px);text-align:center}
+.cta::before{content:'';position:absolute;inset:0;background:radial-gradient(90% 100% at 50% 0%,rgba(216,174,90,.12),transparent 60%)}
+.cta .c-zh{font-family:var(--font-display);font-size:clamp(23px,3.1vw,37px);line-height:1.18;position:relative}
+.cta .c-en{font-family:var(--font-display);font-size:clamp(23px,3.1vw,37px);line-height:1.18;letter-spacing:.005em;
+  text-transform:uppercase;color:var(--en-ink);margin:8px 0 22px;position:relative}
+.cta .c-desc{color:var(--ink-2);max-width:680px;margin:0 auto 34px;position:relative}
+.cta .c-desc .en{display:block;margin-top:7px}
+.cta .c-actions{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;position:relative}
+.footer-bar{margin-top:44px;padding:28px 0;border-top:1px solid var(--border-soft);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.footer-bar .f-brand{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--ink-1)}
+.footer-bar .f-brand span{color:var(--gold)}
+.footer-bar .f-brand .en{margin-left:.5em;color:var(--en-ink)}
+.footer-bar .f-copy{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-3);line-height:1.5}
+.footer-bar .f-copy .en{display:block;margin-top:2px}
+.footer-bar .f-links{display:flex;gap:18px}
+.footer-bar .f-links a{font-family:var(--font-mono);font-size:12px;color:var(--ink-2);transition:color .25s var(--ease)}
+.footer-bar .f-links a .en{margin-left:.4em}
+.footer-bar .f-links a:hover{color:var(--gold)}
+
+/* ==========================================================================
+   返回顶部
+   ========================================================================== */
+#toTop{position:fixed;right:26px;bottom:26px;z-index:900;width:48px;height:48px;border-radius:50%;
+  background:var(--panel-2);border:1px solid var(--border);color:var(--ink-1);font-size:18px;
+  display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transform:translateY(10px);
+  transition:opacity .35s var(--ease),transform .35s var(--ease),visibility .35s,border-color .25s}
+#toTop.show{opacity:1;visibility:visible;transform:translateY(0)}
+#toTop:hover{border-color:var(--gold-line);color:var(--gold)}
+
+/* ==========================================================================
+   Toast
+   ========================================================================== */
+#toast{position:fixed;left:50%;bottom:32px;transform:translate(-50%,16px);z-index:var(--z-toast);
+  display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--gold-line);border-radius:12px;
+  padding:13px 20px;font-size:14px;color:var(--ink-1);box-shadow:0 20px 50px -16px rgba(0,0,0,.7);
+  opacity:0;visibility:hidden;transition:opacity .35s var(--ease),transform .35s var(--ease),visibility .35s}
+#toast.show{opacity:1;visibility:visible;transform:translate(-50%,0)}
+#toast .t-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:0 0 auto}
+
+/* ==========================================================================
+   模态（提示词 / 图片预览）
+   ========================================================================== */
+.modal{position:fixed;inset:0;z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:24px}
+.modal[hidden]{display:none}
+.modal-mask{position:absolute;inset:0;background:rgba(5,6,8,.78);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.modal-box{position:relative;z-index:1;background:var(--panel);border:1px solid var(--border);border-radius:var(--r-lg);
+  width:min(720px,100%);max-height:min(86vh,900px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 40px 120px -40px rgba(0,0,0,.9)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 24px;border-bottom:1px solid var(--border-soft);background:var(--panel-2)}
+.modal-head .mh-id{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;color:var(--gold)}
+.modal-head .mh-title{font-size:16px;font-weight:600;margin-top:3px;line-height:1.35}
+.modal-head .mh-title .en{margin-left:.5em;font-weight:400}
+.modal-close{width:38px;height:38px;border-radius:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--ink-2);flex:0 0 auto;transition:border-color .25s,color .25s}
+.modal-close:hover{border-color:var(--gold-line);color:var(--ink-1)}
+.modal-body{flex:1;overflow-y:auto;padding:24px}
+.modal-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:16px 24px;border-top:1px solid var(--border-soft);background:var(--panel-2)}
+
+/* 提示词标签页 */
+.tabs{display:flex;gap:8px;margin-bottom:20px}
+.tab{font-family:var(--font-mono);font-size:12px;letter-spacing:.04em;padding:10px 16px;border-radius:10px;border:1px solid var(--border);color:var(--ink-2);transition:border-color .25s,background .25s,color .25s}
+.tab .en{margin-left:.45em}
+.tab[aria-selected="true"]{color:var(--gold);border-color:var(--gold-line);background:var(--gold-bg)}
+.tab[aria-selected="true"].neg{color:var(--warn);border-color:rgba(217,168,91,.4);background:rgba(217,168,91,.08)}
+.tab-panel[hidden]{display:none}
+.prompt-badge{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;color:var(--warn);margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.prompt-badge .en{letter-spacing:.16em;text-transform:uppercase}
+.prompt-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--warn)}
+.codeblock{position:relative;background:#0D1014;border:1px solid var(--border-soft);border-radius:var(--r-md);overflow:hidden}
+.codeblock .cb-head{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border-soft)}
+.codeblock .cb-lang{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink-3)}
+.codeblock .cb-lang .en{margin-left:.4em;letter-spacing:.16em;text-transform:uppercase}
+.codeblock .cb-copy{font-family:var(--font-mono);font-size:11px;letter-spacing:.05em;color:var(--ink-2);padding:6px 12px;border:1px solid var(--border);border-radius:8px;transition:color .25s,border-color .25s,background .25s}
+.codeblock .cb-copy:hover{color:var(--gold);border-color:var(--gold-line)}
+.codeblock .cb-copy.copied{color:var(--ok);border-color:rgba(165,201,139,.4)}
+.codeblock pre{font-family:var(--font-mono);font-size:13px;line-height:1.8;color:var(--ink-1);padding:18px;white-space:pre-wrap;word-break:break-word;max-height:340px;overflow-y:auto}
+.codeblock.neg pre{color:#E9D8C4}
+.tab-note{font-size:12.5px;line-height:1.65;color:var(--ink-3);margin-top:12px;padding:12px 14px;border:1px dashed var(--border-soft);border-radius:8px}
+.tab-note .en{display:block;margin-top:4px}
+
+/* 图片预览弹窗 */
+.lb-box{position:relative;z-index:1;width:min(920px,100%);display:flex;flex-direction:column}
+.lb-stage{position:relative;background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-lg);overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:0}
+.lb-stage img{max-width:100%;max-height:72vh;object-fit:contain}
+.lb-stage .ph{position:absolute;inset:0;border:none;border-radius:0}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;background:rgba(17,20,25,.7);border:1px solid var(--border);color:var(--ink-1);font-size:20px;display:flex;align-items:center;justify-content:center;transition:background .25s,border-color .25s;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+.lb-nav:hover{background:var(--panel-3);border-color:var(--gold-line);color:var(--gold)}
+.lb-prev{left:16px}.lb-next{right:16px}
+.lb-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:14px}
+.lb-foot .lb-count{font-family:var(--font-mono);font-size:12px;letter-spacing:.1em;color:var(--ink-2)}
+.lb-foot .lb-count b{color:var(--gold);font-weight:600}
+.lb-foot .lb-title{font-size:15px;font-weight:600;text-align:center;line-height:1.3}
+.lb-foot .lb-title .en{margin-left:.45em;font-weight:400}
+.lb-foot .lb-sub{font-size:12.5px;color:var(--ink-3);margin-top:3px;text-align:center}
+.lb-foot .lb-sub .en{margin-left:.4em}
+@media (max-width:720px){
+  .modal{padding:0}
+  .modal-box{width:100%;max-height:100vh;height:100vh;border-radius:0;border:none}
+  .modal-foot{padding:14px 16px}
+  .lb-box{width:100%;height:100vh}
+  .lb-stage{border-radius:0;flex:1}
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部滚动进度条 -->
+<div id="progress" aria-hidden="true"></div>
+
+<!-- 顶部导航 -->
+<header id="siteHeader">
+  <div class="wrap nav">
+    <a class="brand" href="#hero" aria-label="AI Image Workflow 首页">
+      <span class="dot" aria-hidden="true"></span>
+      <span>AI IMAGE WORKFLOW</span>
+    </a>
+    <nav class="nav-links" aria-label="主导航 Main navigation">
+      <a href="#workflow" data-spy="workflow">工作流<span class="en">Workflow</span></a>
+      <a href="#principle" data-spy="principle">核心原理<span class="en">Process</span></a>
+      <a href="#comparison" data-spy="comparison">迭代对比<span class="en">Compare</span></a>
+      <a href="#series" data-spy="series">系列输出<span class="en">Series</span></a>
+      <a href="#contact" data-spy="contact">联系<span class="en">Contact</span></a>
+    </nav>
+    <a class="nav-cta" href="#workflow">开始演示 <span class="en">Start Demo</span></a>
+    <button class="burger" id="burger" aria-label="打开导航菜单" aria-expanded="false" aria-controls="mobileMenu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<!-- 移动端菜单 -->
+<nav class="mobile-menu" id="mobileMenu" aria-label="移动端导航" hidden>
+  <a href="#workflow"><span class="idx">01</span><span>工作流<span class="en">Workflow</span></span></a>
+  <a href="#principle"><span class="idx">02</span><span>核心原理<span class="en">Process</span></span></a>
+  <a href="#comparison"><span class="idx">03</span><span>迭代对比<span class="en">Compare</span></span></a>
+  <a href="#series"><span class="idx">04</span><span>系列输出<span class="en">Series</span></span></a>
+  <a href="#contact"><span class="idx">05</span><span>联系<span class="en">Contact</span></span></a>
+</nav>
+
+<main>
+<!-- ============================================================
+     Hero 首屏
+     ============================================================ -->
+<section id="hero" aria-label="首屏介绍">
+  <div class="hero-bg" aria-hidden="true">
+    <!-- 背景视频：低透明度、静音自动播放；加载失败时降级为静态图 -->
+    <video id="heroVideo" autoplay muted loop playsinline preload="metadata" aria-hidden="true">
+      <source src="Electric Toronto.mp4" type="video/mp4">
+    </video>
+    <!-- 视频加载失败时用这张横构图场景图兜底（比竖构图更适合铺满整屏） -->
+    <img id="heroFallback" src="assets/reference/scene-reference.jpg" alt="" hidden>
+  </div>
+  <div class="hero-scrim" aria-hidden="true"></div>
+  <div class="hero-glow" id="heroGlow" aria-hidden="true"></div>
+  <div class="hero-grain" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow">AI 图像生产体系 <span class="en">AI Image Production System</span></p>
+        <h1 class="hero-title">从参考素材到<br><span class="accent">统一的 IP 视觉系统</span></h1>
+        <p class="hero-en">From Reference<br>to a Consistent IP System</p>
+        <p class="hero-desc">通过参考素材锚定角色身份，使用统一的视觉标准控制风格，再通过精准提示词与多轮迭代，建立一套可复用、可扩展、可持续生成的 AI 图像制作流程。
+          <span class="en">Anchor the character identity with reference material, control style with one unified visual standard, then use precise prompts and repeated iteration to build a reusable, extensible and sustainable AI image pipeline.</span>
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#workflow">查看工作流 <span class="en">View Workflow</span> <span class="arr">→</span></a>
+          <button class="btn btn-ghost" id="heroDemo">开始演示 <span class="en">Start Demo</span> <span class="arr">→</span></button>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-frame">
+          <span class="corner"><span class="tick"></span>角色锚点 <span class="en">Character Anchor</span></span>
+          <img src="assets/reference/character-reference.jpg" alt="IP 角色参考图：26 岁藏族登山家初始人物，部分上色水彩风格" loading="eager" decoding="async">
+          <div class="caption">
+            <div>
+              <div class="cap-zh">角色身份锚定</div>
+              <div class="cap-en">Reference Anchoring · 步骤 01</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-float f1">
+          <div class="f-lab">状态 <span class="en">Status</span></div>
+          <div class="f-val">已锚定 <span class="en">Anchored</span></div>
+        </div>
+        <div class="hero-float f2">
+          <div class="f-lab">流程 <span class="en">Pipeline</span></div>
+          <div class="f-val">六阶段 <span class="en">06 Stages</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-metrics">
+      <div class="metric">
+        <div class="m-num">01</div>
+        <div class="m-en">角色一致性<span class="en">Character Consistency</span></div>
+      </div>
+      <div class="metric">
+        <div class="m-num">02</div>
+        <div class="m-en">风格统一性<span class="en">Visual Coherence</span></div>
+      </div>
+      <div class="metric">
+        <div class="m-num">03</div>
+        <div class="m-en">迭代可控性<span class="en">Iterative Control</span></div>
+      </div>
+    </div>
+  </div>
+
+  <a class="scroll-hint" href="#workflow" aria-label="向下探索创作流程 Explore the process">
+    <span class="s-zh">向下探索创作流程</span>
+    <span class="s-en">Explore the Process</span>
+    <span class="wheel" aria-hidden="true"></span>
+  </a>
+</section>
+
+<!-- ============================================================
+     工作流：时间轴 + 步骤面板
+     ============================================================ -->
+<section id="workflow" aria-label="六阶段工作流">
+  <div class="wrap">
+    <div class="tl-top reveal">
+      <div>
+        <p class="eyebrow">交互式流程 <span class="en">Interactive Pipeline</span></p>
+        <div class="tl-pipe" style="margin-top:10px">创作流水线 <span class="en">Creative Pipeline</span> / 六阶段 <span class="en">06 Stages</span></div>
+      </div>
+      <div class="tl-count">第 <b id="tlCounter">01</b> 步 / 共 06 步 <span class="en">Stage <span id="tlCounterEn">01</span> of 06</span></div>
+    </div>
+
+    <!-- 时间轴（由 JS 从 workflowSteps 渲染） -->
+    <div class="timeline" id="timeline" role="tablist" aria-label="创作流程六步骤"></div>
+
+    <!-- 步骤面板（由 JS 渲染） -->
+    <div class="stage reveal" id="stage" style="margin-top:40px"></div>
+  </div>
+</section>
+
+<!-- ============================================================
+     核心原理
+     ============================================================ -->
+<section id="principle" aria-label="工作流核心原理">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">核心原理 <span class="en">Core Workflow Principle</span></p>
+      <h2 class="zh">工作流核心原理</h2>
+      <p class="en">Core Workflow Principle</p>
+    </div>
+
+    <div class="pr-grid">
+      <article class="pr-card reveal">
+        <div class="p-num">01</div>
+        <h3 class="p-zh">可靠的参考素材</h3>
+        <div class="p-en">Reliable Reference</div>
+        <p class="p-desc">锁定角色形象<span class="en">Lock down the character identity</span></p>
+        <div class="p-line"></div>
+      </article>
+      <article class="pr-card reveal">
+        <div class="p-num">02</div>
+        <h3 class="p-zh">精准的提示词</h3>
+        <div class="p-en">Precise Prompts</div>
+        <p class="p-desc">把控画面质量<span class="en">Control the image quality</span></p>
+        <div class="p-line"></div>
+      </article>
+      <article class="pr-card reveal">
+        <div class="p-num">03</div>
+        <h3 class="p-zh">反复的迭代</h3>
+        <div class="p-en">Relentless Iteration</div>
+        <p class="p-desc">实现视觉风格统一<span class="en">Reach one unified visual style</span></p>
+        <div class="p-line"></div>
+      </article>
+    </div>
+
+    <p class="pr-summary reveal">角色一致性不是一次生成得到的结果，而是通过<span class="hl">可靠的参考素材</span>、<span class="hl">明确的视觉标准</span>、<span class="hl">精准的提示词</span>和<span class="hl">持续的反馈迭代</span>共同建立的。
+      <span class="en">Character consistency is not what a single generation produces. It is built together from reliable reference material, an explicit visual standard, precise prompts and continuous feedback-driven iteration.</span>
+    </p>
+  </div>
+</section>
+
+<!-- ============================================================
+     迭代优化对比（独立大区）
+     ============================================================ -->
+<section id="comparison" aria-label="迭代优化对比">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">迭代优化 <span class="en">Iterative Optimization</span></p>
+      <h2 class="zh">迭代优化对比</h2>
+      <p class="en">Before &amp; After Optimization</p>
+      <p class="desc">初稿不是终点。通过多轮反馈逐项修正问题，把一张「方向正确」的初稿，逐步优化为「可交付」的成片。
+        <span class="en">The draft is not the finish line. Fix the issues one by one across several feedback rounds to turn a directionally correct draft into a deliverable final image.</span>
+      </p>
+    </div>
+
+    <div class="cmp-grid">
+      <div class="cmp-side reveal">
+        <div class="cmp-sub">迭代记录 <span class="en">Iteration Log</span></div>
+        <h3 class="cmp-title">每一轮迭代，都在收窄与最终效果的差距<span class="en">Every round narrows the gap to the final result</span></h3>
+        <p>拖拽中缝对比优化前后。左边是初次生成稿，右边是经过提示词修正、局部调整与风格校准后的结果。
+          <span class="en">Drag the divider to compare. The left side is the first-pass draft; the right side is the result after prompt fixes, local adjustments and style calibration.</span>
+        </p>
+        <div class="cmp-stats">
+          <div class="cmp-stat"><div class="cs-num">03</div><div class="cs-lab">迭代轮次<span class="en">Rounds</span></div></div>
+          <div class="cmp-stat"><div class="cs-num">06</div><div class="cs-lab">修正项<span class="en">Fixes</span></div></div>
+          <div class="cmp-stat"><div class="cs-num">01</div><div class="cs-lab">验收版本<span class="en">Final</span></div></div>
+        </div>
+        <div class="ilog" id="comparisonLog" style="margin-top:26px"></div>
+      </div>
+      <div class="reveal">
+        <div id="comparisonSlider"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     系列输出
+     ============================================================ -->
+<section id="series" aria-label="系列化输出">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <p class="eyebrow">系列输出 <span class="en">Series Output</span></p>
+      <h2 class="zh">从一张图<br>建立完整视觉系列</h2>
+      <p class="en">One Character. Many Visual States.</p>
+      <p class="desc">系列化输出并不是简单复制同一张图，而是在保持角色身份、风格、材质和场景氛围统一的基础上，扩展不同的角度、动作和叙事状态。
+        <span class="en">Series output is not copying one image. It expands different angles, actions and narrative states while keeping character identity, style, material and scene mood unified.</span>
+      </p>
+    </div>
+    <div class="series-grid" id="seriesGrid"></div>
+  </div>
+</section>
+</main>
+
+<!-- ============================================================
+     底部总结 + CTA + Contact
+     ============================================================ -->
+<footer id="contact" aria-label="联系与总结">
+  <div class="wrap">
+    <div class="cta reveal">
+      <p class="eyebrow" style="justify-content:center">取得联系 <span class="en">Get in Touch</span></p>
+      <h2 class="c-zh">把流程标准化，<br>让每一次生成都可复现</h2>
+      <div class="c-en">Standardise the pipeline, make every generation reproducible</div>
+      <p class="c-desc">如果你正在做 AI 图像 / 视频相关的视觉项目，欢迎交流工作流搭建、风格控制与系列化产出的经验。
+        <span class="en">If you are working on AI image or video visual projects, let us compare notes on pipeline design, style control and series production.</span>
+      </p>
+      <div class="c-actions">
+        <a class="btn btn-primary" href="mailto:hi@example.com">邮件联系 <span class="en">Email</span> <span class="arr">→</span></a>
+        <a class="btn btn-ghost" href="#workflow">重新浏览工作流 <span class="en">Browse the Workflow</span></a>
+      </div>
+    </div>
+    <div class="footer-bar">
+      <div class="f-brand">AI 图像工作流 <span class="en">AI Image Workflow</span></div>
+      <div class="f-copy">© 2025 · 标准化迭代 AI 图像创作流程 · 作品集展示 <span class="en">Standardised Iterative AI Image Workflow · Portfolio Showcase</span></div>
+      <div class="f-links">
+        <a href="#workflow">工作流<span class="en">Workflow</span></a>
+        <a href="#series">系列<span class="en">Series</span></a>
+        <a href="#contact">联系<span class="en">Contact</span></a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- 返回顶部 -->
+<button id="toTop" aria-label="返回页面顶部">↑</button>
+
+<!-- Toast -->
+<div id="toast" role="status" aria-live="polite"><span class="t-dot"></span><span id="toastMsg"></span></div>
+
+<!-- ============================================================
+     提示词弹窗
+     ============================================================ -->
+<div class="modal" id="promptModal" hidden role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+  <div class="modal-mask" data-close-modal></div>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <div class="mh-id" id="pmId">步骤 01 · STEP 01 OF 06</div>
+        <div class="mh-title" id="pmTitle">参考素材锚定<span class="en">Reference Anchoring</span></div>
+      </div>
+      <button class="modal-close" data-close-modal aria-label="关闭提示词弹窗 Close prompt dialog">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" role="tablist" aria-label="提示词标签页 Prompt tabs">
+        <button class="tab pos" id="tabPos" role="tab" aria-selected="true" aria-controls="panelPos">正向提示词 <span class="en">Positive Prompt</span></button>
+        <button class="tab neg" id="tabNeg" role="tab" aria-selected="false" aria-controls="panelNeg">反向提示词 <span class="en">Negative Prompt</span></button>
+      </div>
+      <div class="tab-panel" id="panelPos" role="tabpanel" aria-labelledby="tabPos">
+        <div class="prompt-badge" id="posBadge" hidden>待替换占位 <span class="en">Prompt content to be replaced</span></div>
+        <div class="codeblock">
+          <div class="cb-head">
+            <span class="cb-lang">正向提示词 <span class="en">Positive Prompt</span></span>
+            <button class="cb-copy" data-copy="pos">复制 <span class="en">Copy</span></button>
+          </div>
+          <pre id="posPre"></pre>
+        </div>
+        <div class="tab-note" id="posSource" hidden></div>
+      </div>
+      <div class="tab-panel" id="panelNeg" role="tabpanel" aria-labelledby="tabNeg" hidden>
+        <div class="prompt-badge" id="negBadge" hidden>待替换占位 <span class="en">Prompt content to be replaced</span></div>
+        <div class="codeblock neg">
+          <div class="cb-head">
+            <span class="cb-lang">反向提示词 <span class="en">Negative Prompt</span></span>
+            <button class="cb-copy" data-copy="neg">复制 <span class="en">Copy</span></button>
+          </div>
+          <pre id="negPre"></pre>
+        </div>
+        <div class="tab-note" id="negNote">反向提示词用于减少：手部扭曲、五官变形、画面噪点、界面错误与不合理结构。</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-sm" data-copy="all">复制提示词 <span class="en">Copy Prompt</span></button>
+      <button class="btn-sm gold" data-close-modal>关闭 <span class="en">Close</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     图片预览弹窗
+     ============================================================ -->
+<div class="modal" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="图片预览">
+  <div class="modal-mask" data-close-modal></div>
+  <div class="lb-box">
+    <div class="lb-stage" id="lbStage">
+      <img id="lbImg" src="" alt="">
+      <button class="lb-nav lb-prev" id="lbPrev" aria-label="上一张 Previous image">‹</button>
+      <button class="lb-nav lb-next" id="lbNext" aria-label="下一张 Next image">›</button>
+    </div>
+    <div class="lb-foot">
+      <div class="lb-count" id="lbCount">01 / 06</div>
+      <div>
+        <div class="lb-title" id="lbTitle"></div>
+        <div class="lb-sub" id="lbSub"></div>
+      </div>
+      <button class="modal-close" data-close-modal aria-label="关闭图片预览 Close image preview">✕</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   ★★★ 修改内容请看这里 ★★★
+   ----------------------------------------------------------------------
+   1) 步骤数据        —— 搜索 workflowSteps（下方），改标题/描述/目标/输入输出/标签
+   2) 图片路径        —— 搜索 workflowSteps 里各步骤的 images 数组，以及
+                        seriesViews / seriesCards 两个数组的 src
+   3) 正向提示词      —— 搜索 positivePrompt 字段（每个步骤）
+   4) 反向提示词      —— 搜索 negativePrompt 字段（每个步骤）
+   5) 对比滑块图片    —— 搜索 STEP5.compare（before / after 两个路径）
+   所有图片路径均为相对路径，页面可双击直接打开。
+   ========================================================================== */
+
+'use strict';
+
+/* ---------- 能力探测（只在顶部读一次） ---------- */
+var RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+var FINE = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+/* ==========================================================================
+   步骤数据（统一数据源：时间轴 / 面板 / 标签 / 弹窗 / 进度 都读这里）
+   ========================================================================== */
+var workflowSteps = [
+  {
+    id: 'step-1',
+    number: '01',
+    titleZh: '参考素材锚定',
+    titleEn: 'Reference Anchoring',
+    descZh: '导入角色参考图、场景参考图以及构图参考图，确定角色的五官、发型、服饰、体型比例、主要道具和基础场景布局。通过建立稳定的视觉锚点，保证同一 IP 角色在不同角度、不同姿势和不同镜头下仍然保持一致。',
+    descEn: 'Import the character, scene and composition references to fix the facial features, hairstyle, costume, body proportions, key props and base scene layout. Stable visual anchors keep the same IP character consistent across different angles, poses and camera setups.',
+    goalZh: '锁定角色身份与基础视觉结构。',
+    goalEn: 'Lock the character identity and the underlying visual structure.',
+    noteZh: '这一阶段不追求复杂画面，而是优先确认「角色是谁、长什么样、处于什么空间」。',
+    noteEn: 'This stage is not about a complex image. Confirm first who the character is, what they look like, and what space they occupy.',
+    inputs: [
+      { zh: '角色参考图', en: 'Character reference' },
+      { zh: '场景参考图', en: 'Scene reference' },
+      { zh: '构图参考图', en: 'Composition reference' }
+    ],
+    outputs: [
+      { zh: '角色身份锚点', en: 'Character identity anchor' },
+      { zh: '服饰和造型锚点', en: 'Costume and styling anchor' },
+      { zh: '场景布局锚点', en: 'Scene layout anchor' }
+    ],
+    tags: [{ zh: '身份', en: 'IDENTITY' }, { zh: '角色', en: 'CHARACTER' }, { zh: '构图', en: 'COMPOSITION' }],
+    /* ★ 三张参考素材图替换位置：把文件丢进 assets/reference/ 即可（文件名保持下面这三个）★ */
+    images: [
+      { src: 'assets/reference/character-reference.jpg', alt: '角色参考图：26 岁藏族登山家初始人物，部分上色水彩风格', label: '角色参考图 Character Reference', role: 'character', roleZh: '角色', real: true },
+      { src: 'assets/reference/scene-reference.jpg', alt: '场景参考图：雪山冰川环境与电影感侧逆光', label: '场景参考图 Scene Reference', role: 'scene', roleZh: '场景', real: true },
+      { src: 'assets/reference/composition-reference.jpg', alt: '构图参考图：人物面部特写构图', label: '构图参考图 Composition Reference', role: 'composition', roleZh: '构图', real: true }
+    ],
+    /* ★ 正向提示词替换位置 ★ */
+    positivePrompt: '特写镜头，一位26岁的藏族登山家，眼神坚毅自信。他身着全套专业登山装备，站在雪山冰川上，身后是连绵的雪山和无垠的蓝天。艺术风格为部分上色，人物主体色彩鲜明，背景的雪山与天空处理成淡淡的水彩灰色调，突出人物。电影感光影，侧逆光勾勒出人物轮廓，充满史诗感和英雄主义。',
+    /* ★ 反向提示词替换位置 ★ */
+    negativePrompt: '避免脸部模糊、五官失真、人物年龄偏大、表情忧郁或恐惧；避免装备错误、安全背带结构混乱、绳索穿模、冰爪比例异常；避免背景抢戏、天空和雪山过于鲜艳、整体色彩过饱和；避免卡通化、Q 版、3D 渲染、油画厚涂、扁平插画；避免低清晰度、噪点过多、边缘脏乱；避免人物姿态僵硬、镜头平视无张力；避免多余登山者、帐篷、建筑、文字、水印、标志；避免雪面反光刺眼、肤色偏色、衣物材质像塑料；避免构图杂乱、主体过小、背景细节过密。'
+  },
+  {
+    id: 'step-2',
+    number: '02',
+    titleZh: '统一风格设定',
+    titleEn: 'Unified Style Definition',
+    descZh: '为整套作品设定固定的视觉标准，包括渲染质感、光影方式、色调关系、材质表现和背景处理。整套画面采用柔和的 3D 潮玩质感、哑光表面、暖环境光和干净的 C4D 渲染语言，使不同画面看起来属于同一个完整的视觉系统。',
+    descEn: 'Set one fixed visual standard for the whole set: render finish, lighting model, tonal relationships, material behaviour and background treatment. A soft 3D toy look, matte surfaces, warm ambient light and a clean C4D render language make every frame read as part of one complete visual system.',
+    goalZh: '建立可持续复用的视觉风格标准。',
+    goalEn: 'Establish a reusable visual style standard.',
+    inputs: [
+      { zh: '角色锚点', en: 'Character anchor' },
+      { zh: '风格参考图', en: 'Style reference' },
+      { zh: '材质参考图', en: 'Material reference' },
+      { zh: '光影参考图', en: 'Lighting reference' }
+    ],
+    outputs: [
+      { zh: '统一渲染质感', en: 'Unified render finish' },
+      { zh: '统一光影方式', en: 'Unified lighting model' },
+      { zh: '统一材质标准', en: 'Unified material standard' },
+      { zh: '统一色调关系', en: 'Unified tonal relationships' }
+    ],
+    tags: [{ zh: '风格', en: 'STYLE' }, { zh: '材质', en: 'MATERIAL' }, { zh: '光影', en: 'LIGHTING' }],
+    images: [
+      { src: 'assets/workflow/style-definition.jpg', alt: '风格设定案例图', label: 'Style Definition', role: 'style', real: false, placeholder: 'style-definition.jpg' }
+    ],
+    styleDna: [
+      { en: 'Soft 3D Toy Look', zh: '柔和 3D 潮玩质感' },
+      { en: 'Matte Surface', zh: '哑光表面' },
+      { en: 'Warm Ambient Light', zh: '暖环境光' },
+      { en: 'Clean C4D Render', zh: '干净的 C4D 渲染' },
+      { en: 'Controlled Background', zh: '受控背景处理' },
+      { en: 'Consistent Material Language', zh: '统一材质语言' }
+    ],
+    hideActions: true,   // 本步骤不显示「View Prompt / View Image」按钮
+    positivePrompt: '[在此填写本步骤的正向提示词]',
+    negativePrompt: '[在此填写本步骤的反向提示词]',
+    placeholderPrompt: true
+  },
+  {
+    id: 'step-3',
+    number: '03',
+    titleZh: '提示词配置',
+    titleEn: 'Prompt Configuration',
+    descZh: '根据角色锚点和视觉风格标准，编写精准的正向提示词，明确控制镜头视角、人物动作、道具关系、屏幕内容、空间结构以及环境细节。同时配置反向提示词，减少手部扭曲、五官变形、画面噪点、界面错误和不合理结构。',
+    descEn: 'Write a precise positive prompt from the character anchor and the visual style standard, explicitly controlling camera angle, subject action, prop relationships, on-screen content, spatial structure and environmental detail. Configure a negative prompt in parallel to suppress distorted hands, warped features, image noise, broken interfaces and implausible structure.',
+    goalZh: '把视觉需求转化为可执行的生成指令。',
+    goalEn: 'Turn a visual intent into executable generation instructions.',
+    inputs: [
+      { zh: '角色设定', en: 'Character spec' },
+      { zh: '风格设定', en: 'Style spec' },
+      { zh: '镜头目标', en: 'Camera target' },
+      { zh: '动作目标', en: 'Action target' }
+    ],
+    outputs: [
+      { zh: '正向提示词', en: 'Positive prompt' },
+      { zh: '反向提示词', en: 'Negative prompt' },
+      { zh: '模型参数建议', en: 'Model parameter guidance' },
+      { zh: '画面验收标准', en: 'Image acceptance criteria' }
+    ],
+    tags: [{ zh: '提示词', en: 'PROMPT' }, { zh: '反向提示词', en: 'NEGATIVE PROMPT' }, { zh: '控制', en: 'CONTROL' }],
+    promptModules: [
+      { key: 'SUBJECT', zh: '特写登山队员', en: 'Close-up of a mountaineer' },
+      { key: 'OBJECT', zh: '戴着氧气面罩', en: 'Wearing an oxygen mask' },
+      { key: 'CAMERA', zh: '特写镜头', en: 'Close-up shot' },
+      { key: 'ACTION', zh: '队员眼睛微闭、表情痛苦', en: 'Eyes half-closed, strained expression' },
+      { key: 'ENVIRONMENT', zh: '面罩内烟雾弥漫凝结成白霜、玻璃结满霜花、光线昏暗', en: 'Vapour condensing to frost inside the mask, frost flowers on the glass, dim ambient light' },
+      { key: 'STYLE', zh: '纪实摄影风格、冷色调', en: 'Documentary photography, cool colour cast' },
+      { key: 'QUALITY CONTROL', zh: '4K 画质', en: '4K image quality' }
+    ],
+    positivePrompt: '特写登山队员戴着氧气面罩，面罩内烟雾弥漫凝结成白霜，队员眼睛微闭表情痛苦，面罩玻璃上结满霜花，光线昏暗，纪实摄影风格，冷色调，4K画质',
+    negativePrompt: '[在此填写本步骤的反向提示词]',
+    negativePlaceholder: true,
+    promptSource: 'assets/b-prompt.txt'
+  },
+  {
+    id: 'step-4',
+    number: '04',
+    titleZh: 'AI 初次生成',
+    titleEn: 'Initial AI Generation',
+    descZh: '基于参考素材、统一风格设定和提示词配置，生成第一版图像。初稿的目标不是立即达到最终效果，而是验证角色身份、构图关系、动作逻辑和整体视觉方向。',
+    descEn: 'Generate the first-pass image from the reference assets, the unified style definition and the prompt configuration. The draft is not meant to be final: it validates character identity, composition, action logic and the overall visual direction.',
+    goalZh: '确认画面方向，并记录需要修正的问题。',
+    goalEn: 'Confirm the visual direction and log every issue that needs correction.',
+    outputState: 'DRAFT GENERATED',
+    inputs: [
+      { zh: '角色锚点', en: 'Character anchor' },
+      { zh: '风格标准', en: 'Style standard' },
+      { zh: '正向提示词', en: 'Positive prompt' },
+      { zh: '反向提示词', en: 'Negative prompt' }
+    ],
+    outputs: [
+      { zh: '初次生成图', en: 'First-pass image' },
+      { zh: '问题记录', en: 'Issue log' },
+      { zh: '方向确认', en: 'Confirmed direction' }
+    ],
+    tags: [{ zh: '生成', en: 'GENERATE' }, { zh: '初稿', en: 'DRAFT' }, { zh: '复核', en: 'REVIEW' }],
+    images: [
+      { src: 'assets/workflow/initial-draft.jpg', alt: 'AI 初次生成图', label: '初次生成图 Initial Draft', role: 'draft', roleZh: '初稿', real: true }
+    ],
+    problems: [
+      { zh: '角色身份', en: 'Character Identity', status: 'CHECK' },
+      { zh: '身体结构', en: 'Anatomy', status: 'NEEDS FIX' },
+      { zh: '构图关系', en: 'Composition', status: 'CHECK' },
+      { zh: '道具位置', en: 'Object Placement', status: 'NEEDS FIX' },
+      { zh: '屏幕内容', en: 'Screen Content', status: 'NEEDS FIX' },
+      { zh: '材质一致性', en: 'Material Consistency', status: 'ACCEPTED' }
+    ],
+    positivePrompt: '[在此填写本步骤的正向提示词]',
+    negativePrompt: '[在此填写本步骤的反向提示词]',
+    placeholderPrompt: true
+  },
+  {
+    id: 'step-5',
+    number: '05',
+    titleZh: '迭代优化',
+    titleEn: 'Iterative Optimization',
+    descZh: '持续调整提示词、镜头视角、人物动作和画面内的屏幕内容，逐项修正初稿中的问题。重点处理角色身份漂移、画风不一致、界面错误、物体细节错位、手部结构异常和背景噪点等问题，直到所有视觉元素保持统一的美学效果。',
+    descEn: 'Keep adjusting the prompt, camera angle, subject action and on-screen content, fixing the draft issue by issue. Focus on identity drift, inconsistent style, interface errors, misaligned object detail, broken hand structure and background noise until every visual element holds one consistent aesthetic.',
+    goalZh: '通过多轮反馈，把初稿逐步优化为可交付图像。',
+    goalEn: 'Turn the draft into a deliverable image through repeated feedback rounds.',
+    inputs: [
+      { zh: '初次生成图', en: 'First-pass image' },
+      { zh: '问题记录', en: 'Issue log' },
+      { zh: '修改后的提示词', en: 'Revised prompt' },
+      { zh: '局部修正要求', en: 'Local correction notes' }
+    ],
+    outputs: [
+      { zh: '优化后图像', en: 'Optimised image' },
+      { zh: '版本差异', en: 'Version difference' },
+      { zh: '修正记录', en: 'Correction log' },
+      { zh: '最终验收结果', en: 'Final acceptance result' }
+    ],
+    tags: [{ zh: '对比', en: 'COMPARE' }, { zh: '精修', en: 'REFINE' }, { zh: '验收', en: 'APPROVE' }],
+    /* ★ 对比滑块图片在这里替换 ★ */
+    compare: {
+      before: 'assets/workflow/initial-draft.jpg',
+      after: 'assets/workflow/refined-result.jpg',
+      beforeLabel: '优化前 Before Optimization',
+      afterLabel: '优化后 After Optimization'
+    },
+    iterationLog: [
+      { roundZh: '第 01 轮', round: 'Round 01', items: [
+        { zh: '修正人物面部比例', en: 'Corrected facial proportions' },
+        { zh: '减少背景杂点', en: 'Reduced background noise' },
+        { zh: '统一哑光材质', en: 'Unified the matte material' }
+      ] },
+      { roundZh: '第 02 轮', round: 'Round 02', items: [
+        { zh: '修正手部结构', en: 'Fixed hand structure' },
+        { zh: '重新调整镜头距离', en: 'Re-framed the camera distance' },
+        { zh: '保持金色道具位置稳定', en: 'Stabilised the gold prop position' }
+      ] },
+      { roundZh: '第 03 轮', round: 'Round 03', items: [
+        { zh: '确认角色身份', en: 'Confirmed character identity' },
+        { zh: '确认统一渲染风格', en: 'Confirmed the unified render style' },
+        { zh: '通过最终视觉检查', en: 'Passed the final visual check' }
+      ] }
+    ],
+    positivePrompt: '将图中人物变为70岁老年形象，头发花白，脸上布满皱纹，但面部特征与原图保持一致。他身穿一件舒适的藏式便装，坐在温暖的室内，背景是模糊的家居环境。保持原图的部分上色艺术风格。',
+    negativePrompt: '[在此填写本步骤的反向提示词]',
+    negativePlaceholder: true,
+    promptSource: 'assets/a-prompt.txt'
+  },
+  {
+    id: 'step-6',
+    number: '06',
+    titleZh: '系列化输出',
+    titleEn: 'Series Output',
+    descZh: '在保留相同角色风格、场景氛围、材质标准和视觉语言的基础上，仅更换拍摄角度、人物姿势和交互动作，最终产出一套完整连贯、高质量的 IP 系列图像，用于作品集展示、品牌视觉、角色设定或后续动态内容制作。',
+    descEn: 'Keeping the same character style, scene mood, material standard and visual language, change only the camera angle, pose and interaction to produce one coherent, high-quality IP series for portfolio presentation, brand visuals, character sheets or downstream motion work.',
+    goalZh: '把单张成功图像扩展为统一的系列作品。',
+    goalEn: 'Expand one successful image into a unified series.',
+    inputs: [
+      { zh: '已确认角色锚点', en: 'Approved character anchor' },
+      { zh: '已确认风格标准', en: 'Approved style standard' },
+      { zh: '已确认提示词结构', en: 'Approved prompt structure' },
+      { zh: '已通过验收的优化图像', en: 'Accepted optimised image' }
+    ],
+    outputs: [
+      { zh: '不同角度', en: 'Multiple angles' },
+      { zh: '不同动作', en: 'Multiple actions' },
+      { zh: '不同场景', en: 'Multiple scenes' },
+      { zh: '同一角色', en: 'One character' },
+      { zh: '统一风格', en: 'Unified style' },
+      { zh: '完整系列', en: 'Complete series' }
+    ],
+    tags: [{ zh: '系列', en: 'SERIES' }, { zh: '一致性', en: 'CONSISTENT' }, { zh: '输出', en: 'OUTPUT' }],
+    hideActions: true,   // 本步骤不显示「View Prompt / View Image」按钮，改为直接点画面看大图
+    positivePrompt: '[在此填写本步骤的正向提示词]',
+    negativePrompt: '[在此填写本步骤的反向提示词]',
+    placeholderPrompt: true
+  }
+];
+
+/* 步骤六面板里的系列展示网格（6 个视角，图片按文件名一一对应放进 assets/series/）
+   对应关系：正面视角 → series-01 ｜ 侧面视角 → series-02 ｜ 特写镜头 → series-03
+             交互场景 → series-04 ｜ 替换姿态 → series-05 ｜ 最终主视觉 → series-06 */
+var seriesViews = [
+  { src: 'assets/series/series-01.jpg', zh: '正面视角',   title: 'Front View',        actionZh: '站立',   action: 'Standing',    status: '就绪 READY', real: true },
+  { src: 'assets/series/series-02.jpg', zh: '侧面视角',   title: 'Side View',         actionZh: '侧身',   action: 'Profile',     status: '就绪 READY', real: true },
+  { src: 'assets/series/series-03.jpg', zh: '特写镜头',   title: 'Close-up',          actionZh: '特写',   action: 'Portrait',    status: '就绪 READY', real: true },
+  { src: 'assets/series/series-04.jpg', zh: '交互场景',   title: 'Interaction Scene', actionZh: '交互',   action: 'Interacting', status: '就绪 READY', real: true },
+  { src: 'assets/series/series-05.jpg', zh: '替换姿态',   title: 'Alternate Pose',    actionZh: '造型',   action: 'Posing',      status: '就绪 READY', real: true },
+  { src: 'assets/series/series-06.jpg', zh: '最终主视觉', title: 'Final Key Visual',  actionZh: '主视觉', action: 'Hero Shot',   status: '就绪 READY', real: true }
+];
+
+/* 系列输出区域（#series）的卡片：与「系列化输出的六个图片」按名称一一对应
+   第一行 A1-A3：正面视角 / 侧面视角 / 特写镜头
+   第二行 B1-B3：交互场景 / 替换姿态 / 最终主视觉
+   （3 列网格 → 前 3 张自动排第一行，后 3 张排第二行） */
+var seriesCards = [
+  { src: 'assets/series/series-01.jpg', zh: '正面视角',   title: 'Front View',        actionZh: '站立',   action: 'Standing',    real: true },
+  { src: 'assets/series/series-02.jpg', zh: '侧面视角',   title: 'Side View',         actionZh: '侧身',   action: 'Profile',     real: true },
+  { src: 'assets/series/series-03.jpg', zh: '特写镜头',   title: 'Close-up',          actionZh: '特写',   action: 'Portrait',    real: true },
+  { src: 'assets/series/series-04.jpg', zh: '交互场景',   title: 'Interaction Scene', actionZh: '交互',   action: 'Interacting', real: true },
+  { src: 'assets/series/series-05.jpg', zh: '替换姿态',   title: 'Alternate Pose',    actionZh: '造型',   action: 'Posing',      real: true },
+  { src: 'assets/series/series-06.jpg', zh: '最终主视觉', title: 'Final Key Visual',  actionZh: '主视觉', action: 'Hero Shot',   real: true }
+];
+
+/* ==========================================================================
+   状态与工具
+   ========================================================================== */
+var state = {
+  current: 0,          // 当前步骤下标 0..5
+  autoplay: false,     // 自动播放中？
+  autoplayTimer: null, // 6 秒换步计时器
+  autoplayRaf: null,   // 倒计时进度条 rAF
+  autoplayStart: 0,    // 本轮倒计时起点
+  modal: null,         // 'prompt' | 'lightbox' | null
+  lightbox: { items: [], index: 0 }
+};
+
+var $ = function (sel, root) { return (root || document).querySelector(sel); };
+var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+/* ---------- Toast（轻量状态通知，不阻塞、可被读屏读取） ---------- */
+var toastTimer = null;
+function toast(msg) {
+  // msg 允许带 <span class="en"> 英文释义，所以走 innerHTML（内容都是本文件内的常量字符串）
+  $('#toastMsg').innerHTML = msg;
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { $('#toast').classList.remove('show'); }, 2400);
+}
+
+/* ---------- 复制（含不支持剪贴板时的备用） ---------- */
+function copyText(text, btn) {
+  function done() {
+    if (btn) {
+      btn.innerHTML = '已复制 <span class="en">Copied</span>';
+      btn.classList.add('copied');
+      setTimeout(function () { btn.innerHTML = '复制 <span class="en">Copy</span>'; btn.classList.remove('copied'); }, 1500);
+    }
+    toast('已复制到剪贴板 <span class="en">Copied to clipboard</span>');
+  }
+  function fallback() {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    if (ok) { done(); } else {
+      toast('当前浏览器不支持自动复制，请手动选择文本复制 <span class="en">Clipboard unavailable: select the text and copy manually</span>');
+    }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, fallback);
+  } else {
+    fallback();
+  }
+}
+
+/* ==========================================================================
+   占位组件（缺图时统一显示，保留待替换路径结构）
+   ========================================================================== */
+function placeholderMarkup(name, cls) {
+  return '<div class="ph ' + (cls || '') + '" role="img" aria-label="待替换图片占位：' + name + '">' +
+    '<div class="ph-icon">◇</div>' +
+    '<div class="ph-name">' + name + '</div>' +
+    '<div class="ph-path">assets/</div>' +
+    '<div class="ph-note">待替换 <span class="en">TO BE REPLACED</span></div>' +
+  '</div>';
+}
+
+/* 图片加载失败时的降级：把 <img data-ph="..."> 换成占位组件（JS 绑定，避免内联引号冲突） */
+function attachImgFallbacks(root) {
+  $$('img[data-ph]', root).forEach(function (img) {
+    img.addEventListener('error', function () {
+      var name = img.getAttribute('data-ph') || 'image';
+      var wrapper = document.createElement('div');
+      wrapper.className = 'ph aspect';
+      wrapper.setAttribute('role', 'img');
+      wrapper.setAttribute('aria-label', '待替换图片占位：' + name);
+      wrapper.innerHTML = '<div class="ph-icon">◇</div><div class="ph-name">' + name + '</div>' +
+        '<div class="ph-path">assets/</div><div class="ph-note">待替换 <span class="en">TO BE REPLACED</span></div>';
+      img.parentNode.replaceChild(wrapper, img);
+    });
+  });
+}
+
+/* ==========================================================================
+   时间轴渲染
+   ========================================================================== */
+var timelineEl = $('#timeline');
+
+function renderTimeline() {
+  var html = '';
+  workflowSteps.forEach(function (step, i) {
+    var cls = 'tl-node';
+    if (i < state.current) cls += ' is-done';
+    else if (i === state.current) cls += ' is-current';
+    // 节点状态：中文 + 英文同字号（英文高亮）
+    var status = i < state.current
+      ? '已完成 <span class="en">Done</span>'
+      : (i === state.current ? '当前 <span class="en">Current</span>' : '未开始 <span class="en">Pending</span>');
+    html +=
+      '<button class="' + cls + '" role="tab" data-step="' + i + '" ' +
+      'aria-selected="' + (i === state.current ? 'true' : 'false') + '" ' +
+      'aria-current="' + (i === state.current ? 'step' : 'false') + '" ' +
+      'aria-label="步骤 ' + step.number + ' ' + step.titleZh + ' ' + step.titleEn + '">' +
+        '<span class="t-dot"><i></i></span>' +
+        '<span class="t-num">' + step.number + '</span>' +
+        '<span class="t-zh">' + step.titleZh + '</span>' +
+        '<span class="t-en">' + step.titleEn + '</span>' +
+        '<span class="t-status">' + status + '</span>' +
+      '</button>';
+  });
+  timelineEl.innerHTML = html;
+  // 进度线宽度 = 当前步骤下标 × 每格宽度（1/6），正好到当前节点圆心
+  var pct = state.current * (100 / workflowSteps.length);
+  var prog = $('.tl-progress', timelineEl);
+  if (prog) prog.style.width = pct + '%';
+}
+
+// 时间轴节点点击（事件委托，重渲染后依然有效）；手动点击节点会暂停自动播放
+timelineEl.addEventListener('click', function (e) {
+  var node = e.target.closest ? e.target.closest('.tl-node') : null;
+  if (!node) return;
+  pauseAutoplay();
+  goToStep(parseInt(node.getAttribute('data-step'), 10));
+});
+
+/* ==========================================================================
+   步骤面板渲染
+   ========================================================================== */
+var stageEl = $('#stage');
+
+function ioList(list, kind) {
+  var head = (kind === 'in' ? '输入' : '输出') + ' <span class="en">' + (kind === 'in' ? 'Input' : 'Output') + '</span>';
+  return '<div class="io-box ' + kind + '"><h4>' + head + '</h4><ul>' +
+    list.map(function (x) { return '<li>' + x.zh + '<span class="en">' + x.en + '</span></li>'; }).join('') + '</ul></div>';
+}
+
+/* 根据步骤类型渲染右侧案例区 */
+function renderCase(step) {
+  var html = '';
+
+  if (step.id === 'step-1') {
+    // 参考图连线组
+    html += '<div class="case-label">参考素材 <span class="en">Reference Assets</span></div>';
+    html += '<div class="ref-grid">';
+    step.images.forEach(function (img, i) {
+      var media = img.real
+        ? '<img class="r-img" src="' + img.src + '" alt="' + img.alt + '" data-ph="' + (img.placeholder || img.label) + '" loading="lazy" decoding="async">'
+        : placeholderMarkup(img.placeholder || img.label, 'aspect');
+      html += '<div class="ref-cell">' +
+        '<span class="r-tag">' + (img.roleZh || '') + ' ' + img.role.toUpperCase() + '</span>' +
+        media +
+        '<div class="r-hover">' + img.label + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    html += '<div class="ref-link"><span class="ln"></span><span class="lbl">已关联 <span class="en">Anchored</span></span><span class="ln"></span></div>';
+    html += '<div class="case-caption">' + step.noteZh + '<span class="en">' + step.noteEn + '</span></div>';
+  }
+
+  else if (step.id === 'step-2') {
+    html += '<div class="case-label">风格基因 <span class="en">Style DNA</span></div>';
+    html += '<div class="dna">' + step.styleDna.map(function (d) {
+      return '<div class="dna-item"><span class="di-dot"></span><span>' + d.zh + ' <span class="en">' + d.en + '</span></span></div>';
+    }).join('') + '</div>';
+    html += '<div class="case-caption" style="margin-top:18px">风格标准一旦锁定，整组作品共享同一套渲染质感、光影与材质语言。' +
+      '<span class="en">Once the style standard is locked, the whole set shares one render finish, lighting model and material language.</span></div>';
+  }
+
+  else if (step.id === 'step-3') {
+    html += '<div class="case-label">提示词结构 <span class="en">Prompt Structure</span></div>';
+    html += '<div class="pm">' + step.promptModules.map(function (m) {
+      return '<div class="pm-item">' +
+        '<button class="pm-head" data-pm aria-expanded="false"><span class="pm-key">' + m.key + '</span><span class="pm-chev">▾</span></button>' +
+        '<div class="pm-body"><div class="pm-body-in">' + m.zh + '<span class="en">' + m.en + '</span></div></div>' +
+      '</div>';
+    }).join('') + '</div>';
+    html += '<div class="case-caption" style="margin-top:14px">点击模块展开对应提示词片段；完整提示词见「查看提示词」。' +
+      '<span class="en">Expand a module to see its prompt fragment. The full text is in View Prompt.</span></div>';
+  }
+
+  else if (step.id === 'step-4') {
+    html += '<div class="case-label">初稿产出 <span class="en">Draft Output</span></div>';
+    var img = step.images[0];
+    html += '<div class="ref-cell" style="max-width:340px">' +
+      '<span class="r-tag">' + step.outputState + '</span>' +
+      (img.real ? '<img class="r-img" src="' + img.src + '" alt="' + img.alt + '" data-ph="' + (img.placeholder || img.label) + '" loading="lazy" decoding="async">' : placeholderMarkup(img.placeholder || img.label, 'aspect')) +
+    '</div>';
+    html += '<div class="case-label" style="margin-top:22px">问题记录 <span class="en">Issue Log</span></div>';
+    html += '<div class="issues">' + step.problems.map(function (p) {
+      var st = p.status === 'CHECK' ? 'st-check' : (p.status === 'NEEDS FIX' ? 'st-fix' : 'st-ok');
+      var zh = p.status === 'CHECK' ? '需核对' : (p.status === 'NEEDS FIX' ? '需修正' : '已接受');
+      return '<div class="issue"><span class="i-name">' + p.zh + ' <span class="en">' + p.en + '</span></span>' +
+        '<span class="i-status ' + st + '">' + zh + ' <span class="en">' + p.status + '</span></span></div>';
+    }).join('') + '</div>';
+  }
+
+  else if (step.id === 'step-5') {
+    html += '<div class="case-label">优化前后对比 <span class="en">Before / After</span></div>';
+    html += '<div class="compare" data-compare></div>';
+    html += '<div class="ilog">';
+    html += '<div class="ilog-title">迭代记录 <span class="en">Iteration Log</span></div>';
+    step.iterationLog.forEach(function (r) {
+      html += '<div class="ilog-round"><div class="r-tag">' + r.roundZh + '<span class="en">' + r.round + '</span></div><ul>' +
+        r.items.map(function (it) { return '<li>' + it.zh + '<span class="en">' + it.en + '</span></li>'; }).join('') + '</ul></div>';
+    });
+    html += '</div>';
+  }
+
+  else if (step.id === 'step-6') {
+    html += '<div class="case-label">系列展示网格 <span class="en">Series Grid</span></div>';
+    html += '<div class="ref-grid ref-grid--series" style="grid-template-columns:repeat(2,1fr)">';
+    seriesViews.forEach(function (sv, i) {
+      var media = sv.real
+        ? '<img class="r-img" src="' + sv.src + '" alt="' + sv.zh + ' ' + sv.title + '" data-ph="' + (sv.placeholder || sv.title) + '" loading="lazy" decoding="async">'
+        : placeholderMarkup(sv.placeholder || sv.title, 'aspect');
+      // 每格本身是真实 button：点击直接开大图预览（方向键切换、Esc 关闭）
+      html += '<button class="ref-cell ref-cell--btn" data-series-view="' + i + '" aria-label="查看 ' + sv.zh + ' ' + sv.title + ' 大图">' +
+        '<span class="r-tag">' + sv.status + '</span>' +
+        media +
+        '<span class="r-hover">' + sv.zh + ' <span class="en">' + sv.title + '</span></span>' +
+      '</button>';
+    });
+    html += '</div>';
+    html += '<div class="case-caption">点击任意画面即可全屏预览系列作品，方向键切换，Esc 关闭。' +
+      '<span class="en">Click any frame to open it full screen. Arrow keys switch frames, Esc closes.</span></div>';
+  }
+
+  return html;
+}
+
+function renderStep(animate) {
+  var step = workflowSteps[state.current];
+
+  var html = '';
+  html += '<div class="stage-top">' +
+    '<div class="st-id">步骤 <b>' + step.number + '</b> <span class="en">STEP ' + step.number + ' / ' + step.titleEn.toUpperCase() + '</span></div>' +
+    '<div class="st-state"><span>' + (step.id === 'step-4' ? '已生成初稿 <span class="en">DRAFT GENERATED</span>' : (step.id === 'step-6' ? '系列已就绪 <span class="en">SERIES READY</span>' : '就绪 <span class="en">READY</span>')) + '</span></div>' +
+  '</div>';
+
+  html += '<div class="step">';
+  // 左栏：编号 / 标题 / 描述 / 目标 / 输入输出 / 标签（每项中英同字号）
+  html += '<div class="step-left">' +
+    '<div class="step-num">步骤 ' + step.number + ' <span class="en">STEP ' + step.number + '</span></div>' +
+    '<h3 class="step-title">' + step.titleZh + '</h3>' +
+    '<div class="step-title-en">' + step.titleEn + '</div>' +
+    '<p class="step-desc">' + step.descZh + '<span class="en">' + step.descEn + '</span></p>' +
+    '<div class="step-goal"><div class="g-lab">核心目标 <span class="en">Core Goal</span></div><div class="g-val">' + step.goalZh + '<span class="en">' + step.goalEn + '</span></div></div>' +
+    '<div class="io">' + ioList(step.inputs, 'in') + ioList(step.outputs, 'out') + '</div>' +
+    '<div class="tags">' + step.tags.map(function (t) { return '<span class="tag">' + t.zh + ' <span class="en">' + t.en + '</span></span>'; }).join('') + '</div>' +
+  '</div>';
+
+  // 右栏：案例
+  html += '<div class="step-right">' + renderCase(step);
+  // 在步骤数据里加 hideActions: true 即可关掉这一组按钮
+  // （步骤二只展示 Style DNA，既无案例图也无真实提示词，所以关掉）
+  if (!step.hideActions) {
+    html += '<div class="case-actions">' +
+      '<button class="btn-sm gold" data-view-prompt>查看提示词 <span class="en">View Prompt</span></button>' +
+      (step.images && step.images.length ? '<button class="btn-sm" data-view-case>查看图片 <span class="en">View Image</span></button>' : '') +
+    '</div>';
+  }
+  html += '</div>';
+  html += '</div>';
+
+  // 底部控件（中文在上、英文在下，同字号）
+  var isFirst = state.current === 0;
+  var isLast = state.current === workflowSteps.length - 1;
+  html += '<div class="step-controls">' +
+    '<div class="sc-group">' +
+      '<button class="btn-nav" data-prev ' + (isFirst ? 'disabled' : '') + '><span><span class="nv-main">← 上一步</span><span class="nv-sub">Previous Step</span></span></button>' +
+      '<button class="btn-nav btn-autoplay" data-autoplay><span class="autoplay-fill" data-autoplay-fill></span><span><span class="nv-main" data-ap-main>' + (state.autoplay ? '⏸ 暂停演示' : '▶ 自动播放') + '</span><span class="nv-sub" data-ap-sub>' + (state.autoplay ? 'Pause Demo' : 'Auto Play') + '</span></span></button>' +
+      '<button class="btn-nav" data-next ' + (isLast ? 'disabled' : '') + '><span><span class="nv-main">下一步 →</span><span class="nv-sub">Next Step</span></span></button>' +
+    '</div>' +
+    '<div class="step-progress">第 <b>' + step.number + '</b> 步 / 共 06 步 · ' + step.titleZh +
+      ' <span class="en">' + step.titleEn + '</span></div>' +
+  '</div>';
+
+  stageEl.innerHTML = html;
+  attachImgFallbacks(stageEl);
+
+  if (animate) {
+    stageEl.classList.remove('anim');
+    void stageEl.offsetWidth; // 重排以重触发动画
+    stageEl.classList.add('anim');
+  }
+
+  // 步骤相关的事件绑定
+  bindStepEvents(step);
+  // 若为步骤五，初始化对比滑块
+  if (step.id === 'step-5') initCompare($('[data-compare]', stageEl), step.compare);
+}
+
+function bindStepEvents(step) {
+  $$('[data-prev]', stageEl).forEach(function (b) { b.addEventListener('click', prev); });
+  $$('[data-next]', stageEl).forEach(function (b) { b.addEventListener('click', next); });
+  $$('[data-autoplay]', stageEl).forEach(function (b) { b.addEventListener('click', toggleAutoplay); });
+  $$('[data-view-prompt]', stageEl).forEach(function (b) { b.addEventListener('click', function () { pauseAutoplay(); openPrompt(step); }); });
+  $$('[data-view-case]', stageEl).forEach(function (b) {
+    b.addEventListener('click', function () {
+      var items = step.images.map(function (im) {
+        return { src: im.src, title: im.label, sub: step.titleZh + ' · ' + step.titleEn, real: im.real, placeholder: im.placeholder || im.label };
+      });
+      openLightbox(items, 0);
+    });
+  });
+  // 系列网格：点任意一格 → 从该张开始全屏预览
+  $$('[data-series-view]', stageEl).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var i = parseInt(btn.getAttribute('data-series-view'), 10);
+      openLightbox(seriesViews.map(function (sv) {
+        return { src: sv.src, title: sv.title, sub: sv.zh + ' · ' + sv.action, real: sv.real, placeholder: sv.placeholder || sv.title };
+      }), i);
+    });
+  });
+  // 提示词结构模块展开
+  $$('[data-pm]', stageEl).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var item = btn.parentNode;
+      var open = item.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+}
+
+/* ---------- 步骤切换 ---------- */
+function goToStep(i, opts) {
+  opts = opts || {};
+  i = clamp(i, 0, workflowSteps.length - 1);
+  var changed = i !== state.current;
+  state.current = i;
+  renderTimeline();
+  renderStep(changed && !RM);
+  // 同步 URL hash（刷新后恢复）
+  var hash = '#' + workflowSteps[i].id;
+  if (history.replaceState) history.replaceState(null, '', hash);
+  else location.hash = hash;
+  // 更新顶部计数（中英两处）
+  $('#tlCounter').textContent = workflowSteps[i].number;
+  var enCounter = $('#tlCounterEn');
+  if (enCounter) enCounter.textContent = workflowSteps[i].number;
+  // 移动端把当前节点滚到可见
+  var node = $('.tl-node[data-step="' + i + '"]', timelineEl);
+  if (node && node.scrollIntoView && window.innerWidth <= 900) {
+    node.scrollIntoView({ behavior: RM ? 'auto' : 'smooth', inline: 'center', block: 'nearest' });
+  }
+}
+
+function next() { pauseAutoplay(); goToStep(state.current + 1); }
+function prev() { pauseAutoplay(); goToStep(state.current - 1); }
+
+/* ==========================================================================
+   自动播放（每步 6 秒，到最后一步停止，不循环）
+   ========================================================================== */
+function toggleAutoplay() {
+  if (RM) { toast('已启用减少动态效果，自动播放已禁用 <span class="en">Reduced motion is on: autoplay disabled</span>'); return; }
+  if (state.autoplay) { pauseAutoplay(); return; }
+  // 已在最后一步时，先回到第一步再播放
+  if (state.current === workflowSteps.length - 1) goToStep(0);
+  state.autoplay = true;
+  startAutoplayStep();
+  $('#workflow').scrollIntoView({ behavior: RM ? 'auto' : 'smooth', block: 'start' });
+  toast('自动播放开始 <span class="en">Auto play started</span>');
+  updateAutoplayBtn();
+}
+
+function startAutoplayStep() {
+  clearTimeout(state.autoplayTimer);
+  state.autoplayStart = performance.now();
+  animateAutoplayFill();
+  state.autoplayTimer = setTimeout(function () {
+    if (!state.autoplay) return;
+    if (state.current === workflowSteps.length - 1) {
+      pauseAutoplay(); // 到最后一步停止
+      toast('演示结束 <span class="en">Demo finished</span>');
+      return;
+    }
+    goToStep(state.current + 1);
+    updateAutoplayBtn(); // 重渲染后恢复「Pause Demo」的金色播放态
+    startAutoplayStep();
+  }, 6000);
+}
+
+function animateAutoplayFill() {
+  if (!state.autoplay) return;
+  function frame(now) {
+    if (!state.autoplay) return;
+    var t = clamp((now - state.autoplayStart) / 6000, 0, 1);
+    var fill = $('[data-autoplay-fill]', stageEl);
+    if (fill) fill.style.transform = 'scaleX(' + t + ')';
+    if (t < 1) state.autoplayRaf = requestAnimationFrame(frame);
+  }
+  state.autoplayRaf = requestAnimationFrame(frame);
+}
+
+function pauseAutoplay() {
+  if (!state.autoplay) return;
+  state.autoplay = false;
+  clearTimeout(state.autoplayTimer);
+  if (state.autoplayRaf) cancelAnimationFrame(state.autoplayRaf);
+  var fill = $('[data-autoplay-fill]', stageEl);
+  if (fill) fill.style.transform = 'scaleX(0)';
+  updateAutoplayBtn();
+}
+
+function updateAutoplayBtn() {
+  $$('[data-autoplay]', stageEl).forEach(function (b) {
+    b.classList.toggle('playing', state.autoplay);
+    var main = $('[data-ap-main]', b);
+    if (main) main.textContent = state.autoplay ? '⏸ 暂停演示' : '▶ 自动播放';
+    var sub = $('[data-ap-sub]', b);
+    if (sub) sub.textContent = state.autoplay ? 'Pause Demo' : 'Auto Play';
+  });
+}
+
+/* ==========================================================================
+   对比滑块（拖拽 / 触摸 / 键盘 / 无障碍）
+   ========================================================================== */
+function buildCompareHtml(cfg) {
+  return '<div class="compare-stage" role="group" aria-label="优化前后对比 Before and After comparison">' +
+    '<img class="compare-layer compare-layer--after" src="' + cfg.after + '" alt="优化后 After Optimization" decoding="async">' +
+    '<div class="compare-layer compare-layer--before"><img src="' + cfg.before + '" alt="优化前 Before Optimization" decoding="async"></div>' +
+    '<div class="compare-handle" role="slider" tabindex="0" aria-label="对比滑块，可拖动或使用方向键调整" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" aria-valuetext="50%" aria-orientation="horizontal">' +
+      '<span class="ch-dot" aria-hidden="true">◂ ▸</span>' +
+    '</div>' +
+    '<div class="compare-tags"><span class="compare-tag">' + cfg.beforeLabel + '</span><span class="compare-tag t-after">' + cfg.afterLabel + '</span></div>' +
+  '</div>' +
+  '<div class="compare-hint">拖拽中缝或使用键盘：<kbd>←</kbd><kbd>→</kbd> 微调 · <kbd>Home</kbd> 0% · <kbd>End</kbd> 100%</div>';
+}
+
+function initCompare(root, cfg) {
+  if (!root) return;
+  root.innerHTML = buildCompareHtml(cfg);
+  var stage = $('.compare-stage', root);
+  var handle = $('.compare-handle', root);
+  var pos = 50;
+  var dragging = false;
+
+  function set(p) {
+    pos = clamp(p, 0, 100);
+    stage.style.setProperty('--pos', pos + '%');
+    handle.style.left = pos + '%';
+    handle.setAttribute('aria-valuenow', Math.round(pos));
+    handle.setAttribute('aria-valuetext', Math.round(pos) + '%');
+  }
+  function fromClientX(cx) {
+    var rect = stage.getBoundingClientRect();
+    return (cx - rect.left) / rect.width * 100;
+  }
+
+  stage.addEventListener('pointerdown', function (e) {
+    dragging = true;
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    set(fromClientX(e.clientX));
+  });
+  stage.addEventListener('pointermove', function (e) {
+    if (dragging) set(fromClientX(e.clientX));
+  });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    stage.addEventListener(ev, function () { dragging = false; });
+  });
+
+  handle.addEventListener('keydown', function (e) {
+    var k = e.key;
+    if (k === 'ArrowLeft' || k === 'ArrowDown') { set(pos - 5); e.preventDefault(); e.stopPropagation(); }
+    else if (k === 'ArrowRight' || k === 'ArrowUp') { set(pos + 5); e.preventDefault(); e.stopPropagation(); }
+    else if (k === 'Home') { set(0); e.preventDefault(); e.stopPropagation(); }
+    else if (k === 'End') { set(100); e.preventDefault(); e.stopPropagation(); }
+  });
+
+  set(50);
+}
+
+/* ==========================================================================
+   提示词弹窗
+   ========================================================================== */
+var promptModal = $('#promptModal');
+var lastFocused = null;
+
+function openPrompt(step) {
+  lastFocused = document.activeElement;
+  $('#pmId').textContent = '步骤 ' + step.number + ' · STEP ' + step.number + ' OF 06';
+  $('#pmTitle').innerHTML = step.titleZh + '<span class="en">' + step.titleEn + '</span>';
+
+  $('#posPre').textContent = step.positivePrompt;
+  $('#negPre').textContent = step.negativePrompt;
+
+  // 占位提示：正向或反向是占位内容时显示徽标
+  var posPlaceholder = step.placeholderPrompt || false;
+  var negPlaceholder = step.negativePlaceholder || step.placeholderPrompt || false;
+  $('#posBadge').hidden = !posPlaceholder;
+  $('#negBadge').hidden = !negPlaceholder;
+  $('#negNote').innerHTML = '反向提示词用于减少：手部扭曲、五官变形、画面噪点、界面错误与不合理结构。' +
+    (negPlaceholder ? '（当前为待替换占位）' : '') +
+    '<span class="en">A negative prompt suppresses distorted hands, warped features, image noise, broken interfaces and implausible structure.' +
+    (negPlaceholder ? ' Currently a placeholder.' : '') + '</span>';
+  var srcEl = $('#posSource');
+  if (step.promptSource && !posPlaceholder) {
+    srcEl.hidden = false;
+    srcEl.innerHTML = '真实提示词来源：' + step.promptSource + '<span class="en">Real prompt source</span>';
+  } else {
+    srcEl.hidden = true;
+  }
+
+  // 默认选中正向
+  activateTab('pos');
+
+  promptModal.hidden = false;
+  state.modal = 'prompt';
+  document.body.classList.add('is-locked');
+  // 焦点进入弹窗（落在第一个标签页按钮上）
+  $('#tabPos').focus();
+}
+
+function activateTab(which) {
+  var isPos = which === 'pos';
+  $('#tabPos').setAttribute('aria-selected', isPos ? 'true' : 'false');
+  $('#tabNeg').setAttribute('aria-selected', isPos ? 'false' : 'true');
+  $('#panelPos').hidden = !isPos;
+  $('#panelNeg').hidden = isPos;
+}
+
+function closePrompt() {
+  if (promptModal.hidden) return;
+  promptModal.hidden = true;
+  state.modal = null;
+  document.body.classList.remove('is-locked');
+  if (lastFocused && lastFocused.focus) lastFocused.focus();
+}
+
+/* ==========================================================================
+   图片预览弹窗
+   ========================================================================== */
+var lightbox = $('#lightbox');
+var lbTouchX = null;
+
+function openLightbox(items, index) {
+  if (!items.length) { toast('暂无可用图片 <span class="en">No image available</span>'); return; }
+  state.lightbox = { items: items, index: clamp(index, 0, items.length - 1) };
+  state.modal = 'lightbox';
+  lastFocused = document.activeElement;
+  lightbox.hidden = false;
+  document.body.classList.add('is-locked');
+  renderLightbox();
+  if (state.lightbox.items.length > 1) $('#lbPrev').focus();
+  else { var cb = $('.modal-close', lightbox); if (cb) cb.focus(); }
+}
+
+function renderLightbox() {
+  var lb = state.lightbox;
+  var item = lb.items[lb.index];
+  var img = $('#lbImg');
+  var stage = $('#lbStage');
+  // 清掉上一次可能残留的占位组件
+  var stalePh = $('.ph', stage);
+  if (stalePh) stalePh.remove();
+
+  if (item.real) {
+    img.hidden = false;
+    img.src = item.src;
+    img.alt = item.title;
+    img.onerror = function () {
+      var ph = $('.ph', stage);
+      if (!ph) {
+        var d = document.createElement('div');
+        d.className = 'ph';
+        d.setAttribute('role', 'img');
+        d.setAttribute('aria-label', '待替换图片占位：' + (item.placeholder || item.title));
+        d.innerHTML = '<div class="ph-icon">◇</div><div class="ph-name">' + (item.placeholder || item.title) + '</div><div class="ph-note">TO BE REPLACED · 待替换</div>';
+        stage.insertBefore(d, img);
+      }
+      img.hidden = true;
+    };
+  } else {
+    img.hidden = true;
+    var d2 = document.createElement('div');
+    d2.className = 'ph';
+    d2.setAttribute('role', 'img');
+    d2.setAttribute('aria-label', '待替换图片占位：' + (item.placeholder || item.title));
+    d2.innerHTML = '<div class="ph-icon">◇</div><div class="ph-name">' + (item.placeholder || item.title) + '</div><div class="ph-note">TO BE REPLACED · 待替换</div>';
+    stage.insertBefore(d2, img);
+  }
+  $('#lbCount').innerHTML = pad2(lb.index + 1) + ' <b>/</b> ' + pad2(lb.items.length);
+  $('#lbTitle').textContent = item.title;
+  $('#lbSub').textContent = item.sub || '';
+  $('#lbPrev').style.visibility = lb.items.length > 1 ? 'visible' : 'hidden';
+  $('#lbNext').style.visibility = lb.items.length > 1 ? 'visible' : 'hidden';
+}
+
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+function lbStep(delta) {
+  var lb = state.lightbox;
+  lb.index = (lb.index + delta + lb.items.length) % lb.items.length;
+  renderLightbox();
+}
+
+function closeLightbox() {
+  if (lightbox.hidden) return;
+  lightbox.hidden = true;
+  state.modal = null;
+  document.body.classList.remove('is-locked');
+  if (lastFocused && lastFocused.focus) lastFocused.focus();
+}
+
+/* ==========================================================================
+   系列输出卡片渲染
+   ========================================================================== */
+function renderSeries() {
+  var grid = $('#seriesGrid');
+  grid.innerHTML = seriesCards.map(function (c, i) {
+    var media = c.real
+      ? '<img src="' + c.src + '" alt="' + c.zh + ' ' + c.title + '" data-ph="' + (c.placeholder || c.title) + '" loading="lazy" decoding="async">'
+      : placeholderMarkup(c.placeholder || c.title, 'aspect-1');
+    return '<button class="series-card" data-series="' + i + '" aria-label="查看 ' + c.zh + ' ' + c.title + ' 大图">' +
+      '<div class="s-media">' + media + '<span class="s-idx">' + pad2(i + 1) + '</span></div>' +
+      '<div class="s-info"><span class="s-text">' +
+        '<div class="s-name">' + c.zh + '<span class="en">' + c.title + '</span></div>' +
+        '<div class="s-sub">' + c.actionZh + '<span class="en">' + c.action + '</span></div>' +
+      '</span><span class="s-view">查看详情 <span class="en">View Detail</span> →</span></div>' +
+    '</button>';
+  }).join('');
+  attachImgFallbacks(grid);
+  $$('[data-series]', grid).forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var i = parseInt(btn.getAttribute('data-series'), 10);
+      openLightbox(seriesCards.map(function (c) {
+        return { src: c.src, title: c.zh + ' ' + c.title, sub: c.actionZh + ' ' + c.action, real: c.real, placeholder: c.placeholder || c.title };
+      }), i);
+    });
+  });
+}
+
+/* ==========================================================================
+   模态通用：遮罩 / Escape / 焦点陷阱
+   ========================================================================== */
+function trapFocus(modal, e) {
+  if (e.key !== 'Tab') return;
+  var focusables = $$('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])', modal).filter(function (el) {
+    return el.offsetParent !== null || el === document.activeElement;
+  });
+  if (!focusables.length) return;
+  var first = focusables[0];
+  var last = focusables[focusables.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+
+document.addEventListener('keydown', function (e) {
+  // 关闭所有模态：Escape
+  if (e.key === 'Escape') {
+    if (state.modal === 'prompt') { closePrompt(); return; }
+    if (state.modal === 'lightbox') { closeLightbox(); return; }
+    if ($('#mobileMenu').classList.contains('open')) { closeMenu(); return; }
+  }
+  if (state.modal === 'prompt') { trapFocus(promptModal, e); return; }
+  if (state.modal === 'lightbox') {
+    trapFocus(lightbox, e);
+    if (e.key === 'ArrowLeft') { lbStep(-1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { lbStep(1); e.preventDefault(); }
+    return;
+  }
+  // 非模态状态下，左右方向键切换步骤（焦点不在滑块上时）
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    var tag = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('role');
+    if (tag === 'slider') return; // 交给滑块自己处理
+    if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) return;
+    if (e.key === 'ArrowLeft') prev();
+    else next();
+    e.preventDefault();
+  }
+});
+
+// 遮罩 / 关闭按钮
+$$('[data-close-modal]').forEach(function (el) {
+  el.addEventListener('click', function () {
+    if (state.modal === 'prompt') closePrompt();
+    else if (state.modal === 'lightbox') closeLightbox();
+  });
+});
+
+// 提示词标签页
+$('#tabPos').addEventListener('click', function () { activateTab('pos'); });
+$('#tabNeg').addEventListener('click', function () { activateTab('neg'); });
+
+// 复制按钮
+$$('.cb-copy').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var which = btn.getAttribute('data-copy');
+    var text = which === 'pos' ? $('#posPre').textContent : $('#negPre').textContent;
+    copyText(text, btn);
+  });
+});
+$$('[data-copy="all"]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var step = workflowSteps[state.current];
+    copyText('Positive:\n' + step.positivePrompt + '\n\nNegative:\n' + step.negativePrompt, btn);
+  });
+});
+
+// 图片预览导航
+$('#lbPrev').addEventListener('click', function () { lbStep(-1); });
+$('#lbNext').addEventListener('click', function () { lbStep(1); });
+
+// 移动端滑动切换图片
+$('#lbStage').addEventListener('touchstart', function (e) { lbTouchX = e.touches[0].clientX; }, { passive: true });
+$('#lbStage').addEventListener('touchend', function (e) {
+  if (lbTouchX === null) return;
+  var dx = e.changedTouches[0].clientX - lbTouchX;
+  if (Math.abs(dx) > 50) { lbStep(dx < 0 ? 1 : -1); }
+  lbTouchX = null;
+}, { passive: true });
+
+/* ==========================================================================
+   移动端菜单
+   ========================================================================== */
+var menu = $('#mobileMenu');
+var burger = $('#burger');
+
+function openMenu() {
+  menu.classList.add('open');
+  menu.hidden = false;
+  burger.setAttribute('aria-expanded', 'true');
+  burger.setAttribute('aria-label', '关闭导航菜单');
+  document.body.classList.add('is-locked');
+  var first = $('a', menu);
+  if (first) first.focus();
+}
+function closeMenu() {
+  menu.classList.remove('open');
+  burger.setAttribute('aria-expanded', 'false');
+  burger.setAttribute('aria-label', '打开导航菜单');
+  document.body.classList.remove('is-locked');
+  // 隐藏动画结束后再 hidden，避免闪烁
+  setTimeout(function () { if (!menu.classList.contains('open')) menu.hidden = true; }, 350);
+}
+burger.addEventListener('click', function () {
+  if (menu.classList.contains('open')) closeMenu();
+  else openMenu();
+});
+$$('a', menu).forEach(function (a) {
+  a.addEventListener('click', function () { closeMenu(); });
+});
+
+/* ==========================================================================
+   滚动进度条 / 导航毛玻璃 / 返回顶部 / 滚动高亮
+   ========================================================================== */
+var progressEl = $('#progress');
+var headerEl = $('#siteHeader');
+var toTopEl = $('#toTop');
+var heroEl = $('#hero');
+var ticking = false;
+
+function onScroll() {
+  ticking = false;
+  var y = window.scrollY || window.pageYOffset;
+  var docH = document.documentElement.scrollHeight - window.innerHeight;
+  var p = docH > 0 ? y / docH : 0;
+  progressEl.style.transform = 'scaleX(' + p + ')';
+
+  // 导航毛玻璃
+  if (y > heroEl.offsetHeight - 120) headerEl.classList.add('scrolled');
+  else headerEl.classList.remove('scrolled');
+
+  // 返回顶部
+  if (y > window.innerHeight) toTopEl.classList.add('show');
+  else toTopEl.classList.remove('show');
+}
+
+window.addEventListener('scroll', function () {
+  if (!ticking) { ticking = true; requestAnimationFrame(onScroll); }
+}, { passive: true });
+
+toTopEl.addEventListener('click', function () {
+  if (RM) window.scrollTo(0, 0);
+  else window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+/* ---------- 导航高亮（scroll-spy） ---------- */
+var spyLinks = $$('.nav-links a[data-spy]');
+var spySections = spyLinks.map(function (a) { return document.getElementById(a.getAttribute('data-spy')); });
+var spyActive = '';
+
+function updateSpy() {
+  var y = window.scrollY + window.innerHeight * 0.32;
+  var currentId = '';
+  for (var i = 0; i < spySections.length; i++) {
+    var sec = spySections[i];
+    if (sec && sec.offsetTop <= y) currentId = sec.id;
+  }
+  if (currentId !== spyActive) {
+    spyActive = currentId;
+    spyLinks.forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-spy') === currentId);
+    });
+  }
+}
+window.addEventListener('scroll', function () { updateSpy(); }, { passive: true });
+
+/* ==========================================================================
+   Hero 鼠标视差（仅桌面，最大 8px，不影响布局）
+   ========================================================================== */
+var heroGlow = $('#heroGlow');
+if (FINE && !RM && heroGlow) {
+  heroEl.addEventListener('mousemove', function (e) {
+    var rect = heroEl.getBoundingClientRect();
+    var nx = (e.clientX - rect.left) / rect.width - 0.5;
+    var ny = (e.clientY - rect.top) / rect.height - 0.5;
+    var tx = clamp(nx * 16, -8, 8);
+    var ty = clamp(ny * 16, -8, 8);
+    requestAnimationFrame(function () {
+      heroGlow.style.transform = 'translate(' + tx + 'px,' + ty + 'px)';
+    });
+  });
+}
+
+/* ==========================================================================
+   进入视口动画（IntersectionObserver，只触发一次）
+   ========================================================================== */
+if (!RM && 'IntersectionObserver' in window) {
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('in');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+  $$('.reveal').forEach(function (el) { io.observe(el); });
+} else {
+  $$('.reveal').forEach(function (el) { el.classList.add('in'); });
+}
+
+/* ==========================================================================
+   Hero 视频：降级 / 减少动态 / 页面隐藏时暂停
+   ========================================================================== */
+var video = $('#heroVideo');
+var fallbackImg = $('#heroFallback');
+
+if (video) {
+  if (RM) {
+    video.pause();
+    video.removeAttribute('autoplay');
+  }
+  video.addEventListener('error', function () {
+    video.hidden = true;
+    fallbackImg.hidden = false;
+  });
+  // 页面不可见时暂停
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && video && !video.paused) video.pause();
+    else if (!document.hidden && !RM && video && video.paused && video.hidden === false) {
+      var p = video.play(); if (p && p.catch) p.catch(function () {});
+    }
+  });
+}
+
+/* ==========================================================================
+   初始化
+   ========================================================================== */
+function initFromHash() {
+  var h = location.hash.replace('#', '');
+  var idx = -1;
+  workflowSteps.forEach(function (s, i) { if (s.id === h) idx = i; });
+  return idx >= 0 ? idx : 0;
+}
+
+// 「开始演示」按钮：滚动到工作流并启动自动播放
+$('#heroDemo').addEventListener('click', function () {
+  var wf = $('#workflow');
+  var y = wf.getBoundingClientRect().top + window.scrollY - 60;
+  window.scrollTo({ top: y, behavior: RM ? 'auto' : 'smooth' });
+  setTimeout(function () {
+    if (!RM) { if (state.current === workflowSteps.length - 1) goToStep(0); state.autoplay = true; startAutoplayStep(); updateAutoplayBtn(); toast('自动播放开始 <span class="en">Auto play started</span>'); }
+    else toast('已启用减少动态效果，自动播放已禁用 <span class="en">Reduced motion is on: autoplay disabled</span>');
+  }, RM ? 0 : 500);
+});
+
+renderTimeline();
+renderSeries();
+goToStep(initFromHash(), false);
+// 独立对比区
+initCompare($('#comparisonSlider'), workflowSteps[4].compare);
+// 独立对比区的迭代记录
+$('#comparisonLog').innerHTML = '<div class="ilog-title">迭代记录 <span class="en">Iteration Log</span></div>' +
+  workflowSteps[4].iterationLog.map(function (r) {
+    return '<div class="ilog-round"><div class="r-tag">' + r.roundZh + '<span class="en">' + r.round + '</span></div><ul>' +
+      r.items.map(function (it) { return '<li>' + it.zh + '<span class="en">' + it.en + '</span></li>'; }).join('') + '</ul></div>';
+  }).join('');
+
+// 初始滚动位置与高亮
+onScroll();
+updateSpy();
+</script>
+</body>
+</html>
