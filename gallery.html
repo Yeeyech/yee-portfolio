@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- ↓ 这两处是页面之外的文案（浏览器标签页 / 搜索结果），页面上看不见；
      其余所有页面上能看到的文字都在下方脚本顶部的 CONFIG 里 -->
-<title>3D 影像环 · 首屏交互模板（复刻 melius.com）</title>
-<meta name="description" content="复刻 melius.com 首屏的 3D 影像环交互模板：影像从中心持续向两侧飞出、画布逐块抖动的标题、打字机提示词输入框。">
+<title>叶春福 Yee · 视觉作品集</title>
+<meta name="description" content="叶春福 Yee 的视觉设计作品集：插画、品牌、界面与图形设计。">
 
 <!-- 自托管真字体（Reckless / FG Futurist / Ease Standard，逐字照抄原站 @font-face） -->
 <link rel="stylesheet" href="assets/fonts/fonts.css">
@@ -297,6 +297,61 @@ body{ margin:0; min-height:100svh; overflow:hidden; font-family:var(--font-sans)
   .card__img,.card__tag,.prompt__ph{ transition:none !important; }
   .prompt.is-active .prompt__glow{ animation:none; background-position:50% 50%; }
   .hint{ transition:none; opacity:1; }
+  .work-modal, .work-modal__dialog{ transition:none !important; }
+}
+
+/* ============================================================================
+   作品详情弹窗（点击影像环画面打开）
+   ========================================================================== */
+.work-modal{
+  position:fixed; inset:0; z-index:50;
+  display:flex; align-items:center; justify-content:center;
+  padding:20px; visibility:hidden; opacity:0;
+  transition:opacity 260ms var(--ease-out), visibility 0s 260ms;
+}
+.work-modal.is-open{ visibility:visible; opacity:1; transition:opacity 260ms var(--ease-out); }
+.work-modal__backdrop{
+  position:absolute; inset:0; background:rgba(14,14,14,.62);
+  -webkit-backdrop-filter:blur(5px); backdrop-filter:blur(5px);
+}
+.work-modal__dialog{
+  position:relative; z-index:1; width:min(720px,100%);
+  max-height:calc(100svh - 40px); overflow:auto;
+  background:var(--color-white); border-radius:16px;
+  box-shadow:0 40px 100px -24px rgba(14,14,14,.65);
+  transform:translateY(18px) scale(.985);
+  transition:transform 320ms var(--ease-out);
+}
+.work-modal.is-open .work-modal__dialog{ transform:none; }
+.work-modal__media{ position:relative; background:var(--color-gray-background); }
+.work-modal__media img{ display:block; width:100%; max-height:56svh; object-fit:contain; }
+.work-modal__close{
+  position:absolute; top:14px; right:14px; z-index:2;
+  width:38px; height:38px; border:0; border-radius:9999px; cursor:pointer;
+  display:grid; place-items:center; color:var(--color-white);
+  background:rgba(14,14,14,.62); font-size:20px; line-height:1;
+  transition:background-color 200ms var(--ease-out), transform 200ms var(--ease-out);
+}
+.work-modal__close:hover{ background:var(--color-orange); }
+.work-modal__close:active{ transform:scale(.92); }
+.work-modal__close:focus-visible{ outline:2px solid var(--color-orange); outline-offset:2px; }
+.work-modal__count{
+  position:absolute; top:18px; left:18px; z-index:2;
+  margin:0; padding:4px 10px; border-radius:999px;
+  font:400 .72rem/1.2 var(--font-mono); letter-spacing:.08em;
+  color:var(--color-white); background:rgba(14,14,14,.62);
+}
+.work-modal__body{ padding:24px 26px 28px; }
+.work-modal__title{
+  margin:0 0 4px; font:400 1.5rem/1.15 var(--font-reckless-standard);
+  color:var(--color-black); letter-spacing:-.01em;
+}
+.work-modal__name{
+  margin:0 0 16px; font:400 .82rem/1.4 var(--font-ease-standard);
+  color:var(--color-gray); letter-spacing:.02em;
+}
+.work-modal__desc{
+  margin:0; font:400 .95rem/1.7 var(--font-sans); color:var(--color-gray-dark-1);
 }
 </style>
 </head>
@@ -358,6 +413,23 @@ body{ margin:0; min-height:100svh; overflow:hidden; font-family:var(--font-sans)
 <!-- 底部操作提示：文字不写在这里，改 CONFIG.hint 即可（见文件下方脚本顶部） -->
 <div class="hint" id="hint"></div>
 
+<!-- ===== 作品详情弹窗 ===== -->
+<div class="work-modal" id="workModal" role="dialog" aria-modal="true" aria-label="作品详情" aria-hidden="true">
+  <div class="work-modal__backdrop" data-close></div>
+  <div class="work-modal__dialog">
+    <button class="work-modal__close" type="button" data-close aria-label="关闭详情">×</button>
+    <div class="work-modal__media">
+      <span class="work-modal__count" id="wmCount"></span>
+      <img id="wmImg" alt="">
+    </div>
+    <div class="work-modal__body">
+      <h2 class="work-modal__title" id="wmTitle"></h2>
+      <p class="work-modal__name" id="wmName"></p>
+      <p class="work-modal__desc" id="wmDesc"></p>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 /* ============================================================================
@@ -381,7 +453,7 @@ body{ margin:0; min-height:100svh; overflow:hidden; font-family:var(--font-sans)
      <title>                     →  浏览器标签页标题
      <meta name="description">   →  搜索引擎摘要
 
-   改作品名时记得 work.html 里的 WORKS 也要一起改（同一编号、同一名字）。
+   改作品名时只需改 CONFIG.works 即可（详情弹窗会自动读取同一条数据，无需另改文件）。
    ========================================================================== */
 const CONFIG = {
   /* 巨型字标（背景那层巨大的淡字） */
@@ -416,9 +488,8 @@ const CONFIG = {
     "Write a release teaser for an indie synth-pop single…",
   ],
 
-  /* 作品数据：img 换成自己的图 / href 换成自己的详情页
-     ar = 图片宽高比。画廊图已统一处理成 3:4（1080×1440），整张完整显示、不裁切。
-     标题目前是占位编号；改成自己的作品名时，work.html 里的标题也要同步改。 */
+  /* 作品数据：img 换成自己的图；点击画面会弹出详情弹窗（显示 t / en / desc）。
+     ar = 图片宽高比。画廊图已统一处理成 3:4（1080×1440），整张完整显示、不裁切。 */
   works: [
     { t:"大叻，2024", en:"Dalat, 2024", desc:"A rose-brick church clusters low and right, two-thirds of the sheet left as luminous sky. Fine ink linework fixes the architecture; watercolour handles the surrounding greenery, softened by dots and wet bleed. A blush oval stamped Dalat 2024 turns a drawing into a dated keepsake: resistance to disappearance.", img:"assets/works/main/01.webp", ar:0.75 },
     { t:"信仰是一束光", en:"Faith Is a Light", desc:"A gothic spire cuts vertically through a rough coral brushstroke that reads as light itself: not light falling on the tower but light as ground. Crosshatched ink lines shape the architecture; dry-brush colour leaves paper breathing through. Above and below, scripted verses. Steadfast, luminous, quietly devotional.", img:"assets/works/main/02.webp", ar:0.75 },
@@ -542,7 +613,7 @@ function buildRing(){
     btn.type = "button";
     btn.className = "card__btn";
     btn.setAttribute("aria-label", `${w.t} ${w.en}`);
-    btn.addEventListener("click", () => { location.href = w.href || ("work.html?id=" + (i + 1)); });
+    btn.addEventListener("click", () => { detailModal.open(w, i); });
 
     const img = document.createElement("img");
     img.className = "card__img";
@@ -999,8 +1070,45 @@ function intro(){
 }
 
 /* ============================================================================
+   作品详情弹窗 —— 点击影像环画面打开
+   ========================================================================== */
+function initDetailModal(){
+  const modal = document.getElementById("workModal");
+  const img = document.getElementById("wmImg");
+  const title = document.getElementById("wmTitle");
+  const name = document.getElementById("wmName");
+  const desc = document.getElementById("wmDesc");
+  const count = document.getElementById("wmCount");
+  let lastFocus = null;
+
+  function open(w, i){
+    img.src = w.img;
+    img.alt = w.t + " " + w.en;
+    title.textContent = w.t;
+    name.textContent = w.en;
+    desc.textContent = w.desc || "";
+    count.textContent = String(i + 1).padStart(2, "0") + " / " + String(CONFIG.works.length).padStart(2, "0");
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    lastFocus = document.activeElement;
+    modal.querySelector(".work-modal__close").focus();
+  }
+  function close(){
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+  modal.addEventListener("click", e => { if (e.target.closest("[data-close]")) close(); });
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && modal.classList.contains("is-open")) close();
+  });
+  return { open, close };
+}
+
+/* ============================================================================
    6. 启动
    ========================================================================== */
+const detailModal = initDetailModal();
 buildRing();
 measure();
 initTitle();
