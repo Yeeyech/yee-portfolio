@@ -563,6 +563,15 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:poin
   .centermark::after{content:"生成中";font:600 11px/1 var(--mono);letter-spacing:.04em;color:var(--accent)}
 }
 </style>
+<style id="presentation-scale">
+/* 会议展示用整体放大：基准字号上调 */
+html { font-size: 17px; }
+body { font-size: 15px; }
+@media (min-width: 1440px) {
+  html { font-size: 18px; }
+  body { font-size: 16px; }
+}
+</style>
 </head>
 <body>
 <a class="skip" href="#stage">跳到播放器</a>

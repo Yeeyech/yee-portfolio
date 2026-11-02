@@ -339,6 +339,71 @@ html.gal-overlay-open { overflow: hidden; }
 @media (max-width: 720px) { .gal-overlay__frame { inset: 0; border-radius: 0; } }
 
 </style>
+<style id="presentation-scale">
+/* ============================================================================
+   Presentation Scale · 会议展示用整体放大 + 小字放大 + 排版优化
+   ----------------------------------------------------------------------------
+   基准字号 16 → 17px；≥1440px（16 寸笔记本）再放大一档；
+   小字（眉标 / 元信息 / 导航 / 时间线 / 说明）统一上调，增强投影可读性。
+   ============================================================================ */
+
+/* ---- 1. 两套主题基准字号 ---- */
+#page-home { font-size: 17px; }
+#page-yiwen { font-size: 17px; }
+
+/* ---- 2. #page-home 深色三幕：小字放大 ---- */
+#page-home .eyebrow { font-size: 13px; letter-spacing: 3px; margin-bottom: 28px; }
+#page-home .scene-copy .role { font-size: 14px; letter-spacing: 2px; }
+#page-home .scene-copy .bio { font-size: 16px; line-height: 1.72; }
+#page-home .career h3 { font-size: 18px; }
+#page-home .career h3 small { font-size: 14px; }
+#page-home .career span { font-size: 13px; }
+#page-home .career p { font-size: 15px; line-height: 1.6; }
+#page-home .motion-toggle { font-size: 14px; }
+#page-home .pill-nav-wordmark { font-size: 30px; }
+#page-home .pill-nav-wordmark span { font-size: 12px; }
+#page-home .click-hint { font-size: 13px; letter-spacing: 2px; }
+
+/* ---- 3. #page-yiwen 浅色作品集：字号 token + 小字放大 ---- */
+#page-yiwen {
+  --fs-micro: 0.9rem;
+  --fs-caption: 0.9rem;
+  --fs-small: 0.95rem;
+  --fs-secondary: 0.95rem;
+  --fs-body: 1.05rem;
+}
+#page-yiwen .nav-logo { font-size: 1.2rem; }
+#page-yiwen .nav-link,
+#page-yiwen .nav-cta { font-size: 0.85rem; letter-spacing: 0.05em; }
+#page-yiwen .hero-label { font-size: 0.85rem; }
+#page-yiwen .hero-meta-label { font-size: 0.8rem; }
+#page-yiwen .hero-meta-value { font-size: 1.05rem; }
+#page-yiwen .hero-scroll { font-size: 0.8rem; }
+#page-yiwen .section-label { font-size: 0.85rem; }
+#page-yiwen .about-block-title { font-size: 0.85rem; }
+#page-yiwen .about-block-content { font-size: 1.05rem; }
+#page-yiwen .about-intro { font-size: clamp(1.4rem, 2.7vw, 2.1rem); }
+#page-yiwen .timeline-year { font-size: 0.9rem; }
+#page-yiwen .timeline-detail h4 { font-size: 1.05rem; }
+#page-yiwen .timeline-detail p { font-size: 0.95rem; line-height: 1.65; }
+
+/* ---- 4. 16 寸笔记本（≥1440px）再放大一档，投影 / 会议更清晰 ---- */
+@media (min-width: 1440px) {
+  #page-home { font-size: 18px; }
+  #page-yiwen { font-size: 18px; }
+  #page-home .eyebrow { font-size: 14px; }
+  #page-home .scene-copy .bio { font-size: 17px; }
+  #page-home .career h3 { font-size: 19px; }
+  #page-home .career h3 small { font-size: 15px; }
+  #page-home .career span { font-size: 14px; }
+  #page-home .career p { font-size: 16px; }
+  #page-yiwen .nav-link,
+  #page-yiwen .nav-cta { font-size: 0.9rem; }
+  #page-yiwen .hero-meta-label { font-size: 0.85rem; }
+  #page-yiwen .hero-meta-value { font-size: 1.1rem; }
+  #page-yiwen .timeline-year { font-size: 0.95rem; }
+}
+</style>
 </head>
 <body>
 

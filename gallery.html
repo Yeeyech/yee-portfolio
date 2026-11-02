@@ -355,6 +355,11 @@ body{ margin:0; min-height:100svh; overflow:hidden; font-family:var(--font-sans)
   margin:0; font:400 .95rem/1.7 var(--font-sans); color:var(--color-gray-dark-1);
 }
 </style>
+<style id="presentation-scale">
+/* 会议展示用整体放大：基准字号上调（rem 比例统一放大） */
+html { font-size: 17px; }
+@media (min-width: 1440px) { html { font-size: 18px; } }
+</style>
 </head>
 <body>
 
