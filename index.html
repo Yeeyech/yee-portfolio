@@ -341,67 +341,88 @@ html.gal-overlay-open { overflow: hidden; }
 </style>
 <style id="presentation-scale">
 /* ============================================================================
-   Presentation Scale · 会议展示用整体放大 + 小字放大 + 排版优化
+   Presentation Scale · 会议展示「小字」放大（16 寸笔记本投影优化）
    ----------------------------------------------------------------------------
-   基准字号 16 → 17px；≥1440px（16 寸笔记本）再放大一档；
-   小字（眉标 / 元信息 / 导航 / 时间线 / 说明）统一上调，增强投影可读性。
+   只放大小字：眉标 / 元信息 / 导航 / 时间线 / 说明 / 作品卡信息 / 页脚。
+   标题等大字保持原样。小字统一用整数 px（避免亚像素模糊）+ 加粗 + 加大行距，
+   提升投影与远距离观看时的清晰度。
    ============================================================================ */
 
-/* ---- 1. 两套主题基准字号 ---- */
+/* ---- 1. 两套主题基准字号（保持，不放大整体） ---- */
 #page-home { font-size: 17px; }
 #page-yiwen { font-size: 17px; }
 
-/* ---- 2. #page-home 深色三幕：小字放大 ---- */
-#page-home .eyebrow { font-size: 13px; letter-spacing: 3px; margin-bottom: 28px; }
-#page-home .scene-copy .role { font-size: 14px; letter-spacing: 2px; }
-#page-home .scene-copy .bio { font-size: 16px; line-height: 1.72; }
-#page-home .career h3 { font-size: 18px; }
-#page-home .career h3 small { font-size: 14px; }
-#page-home .career span { font-size: 13px; }
-#page-home .career p { font-size: 15px; line-height: 1.6; }
-#page-home .motion-toggle { font-size: 14px; }
-#page-home .pill-nav-wordmark { font-size: 30px; }
-#page-home .pill-nav-wordmark span { font-size: 12px; }
-#page-home .click-hint { font-size: 13px; letter-spacing: 2px; }
+/* ---- 2. #page-home 深色三幕：小字 ---- */
+#page-home .eyebrow { font-size: 15px; font-weight: 600; letter-spacing: 3.5px; margin-bottom: 30px; }
+#page-home .scene-copy .role { font-size: 15px; font-weight: 500; letter-spacing: 2px; }
+#page-home .scene-copy .bio { font-size: 18px; line-height: 1.75; }
+#page-home .career h3 { font-size: 20px; }
+#page-home .career h3 small { font-size: 15px; }
+#page-home .career span { font-size: 15px; font-weight: 500; }
+#page-home .career p { font-size: 17px; line-height: 1.65; }
+#page-home .motion-toggle { font-size: 16px; }
+#page-home .pill-nav-wordmark { font-size: 32px; }
+#page-home .pill-nav-wordmark span { font-size: 14px; font-weight: 600; }
+#page-home .click-hint { font-size: 15px; font-weight: 600; letter-spacing: 2.5px; }
 
-/* ---- 3. #page-yiwen 浅色作品集：字号 token + 小字放大 ---- */
+/* ---- 3. #page-yiwen 浅色作品集：token + 小字 ---- */
 #page-yiwen {
-  --fs-micro: 0.9rem;
-  --fs-caption: 0.9rem;
-  --fs-small: 0.95rem;
-  --fs-secondary: 0.95rem;
-  --fs-body: 1.05rem;
+  --fs-micro: 1rem;
+  --fs-caption: 1rem;
+  --fs-small: 1.05rem;
+  --fs-secondary: 1.05rem;
+  --fs-body: 1.15rem;
 }
-#page-yiwen .nav-logo { font-size: 1.2rem; }
+#page-yiwen .nav-logo { font-size: 22px; }
 #page-yiwen .nav-link,
-#page-yiwen .nav-cta { font-size: 0.85rem; letter-spacing: 0.05em; }
-#page-yiwen .hero-label { font-size: 0.85rem; }
-#page-yiwen .hero-meta-label { font-size: 0.8rem; }
-#page-yiwen .hero-meta-value { font-size: 1.05rem; }
-#page-yiwen .hero-scroll { font-size: 0.8rem; }
-#page-yiwen .section-label { font-size: 0.85rem; }
-#page-yiwen .about-block-title { font-size: 0.85rem; }
-#page-yiwen .about-block-content { font-size: 1.05rem; }
-#page-yiwen .about-intro { font-size: clamp(1.4rem, 2.7vw, 2.1rem); }
-#page-yiwen .timeline-year { font-size: 0.9rem; }
-#page-yiwen .timeline-detail h4 { font-size: 1.05rem; }
-#page-yiwen .timeline-detail p { font-size: 0.95rem; line-height: 1.65; }
+#page-yiwen .nav-cta { font-size: 16px; font-weight: 600; letter-spacing: 0.06em; }
+#page-yiwen .hero-label { font-size: 16px; font-weight: 600; letter-spacing: 0.08em; }
+#page-yiwen .hero-meta-label { font-size: 15px; font-weight: 600; letter-spacing: 0.08em; }
+#page-yiwen .hero-meta-value { font-size: 19px; font-weight: 600; }
+#page-yiwen .hero-scroll { font-size: 15px; font-weight: 600; }
+#page-yiwen .section-label { font-size: 16px; font-weight: 600; }
+#page-yiwen .about-block-title { font-size: 16px; font-weight: 600; letter-spacing: 0.12em; }
+#page-yiwen .about-block-content { font-size: 19px; line-height: 1.7; }
+#page-yiwen .timeline-year { font-size: 17px; font-weight: 600; }
+#page-yiwen .timeline-detail h4 { font-size: 19px; }
+#page-yiwen .timeline-detail p { font-size: 17px; line-height: 1.7; }
 
-/* ---- 4. 16 寸笔记本（≥1440px）再放大一档，投影 / 会议更清晰 ---- */
+/* ---- 4. 作品卡 / 联系区小字 ---- */
+#page-yiwen .work-item-tag { font-size: 16px; font-weight: 600; }
+#page-yiwen .work-item-client { font-size: 16px; }
+#page-yiwen .work-item-date { font-size: 16px; font-weight: 600; }
+#page-yiwen .work-item-disciplines { font-size: 15px; }
+#page-yiwen .contact-label { font-size: 16px; font-weight: 600; }
+#page-yiwen .contact-footer { font-size: 15px; }
+
+/* ---- 5. 16 寸笔记本（≥1440px）小字再放大一档 ---- */
 @media (min-width: 1440px) {
-  #page-home { font-size: 18px; }
-  #page-yiwen { font-size: 18px; }
-  #page-home .eyebrow { font-size: 14px; }
-  #page-home .scene-copy .bio { font-size: 17px; }
-  #page-home .career h3 { font-size: 19px; }
-  #page-home .career h3 small { font-size: 15px; }
-  #page-home .career span { font-size: 14px; }
-  #page-home .career p { font-size: 16px; }
+  #page-home .eyebrow { font-size: 16px; }
+  #page-home .scene-copy .role { font-size: 16px; }
+  #page-home .scene-copy .bio { font-size: 19px; }
+  #page-home .career h3 { font-size: 21px; }
+  #page-home .career h3 small { font-size: 16px; }
+  #page-home .career span { font-size: 16px; }
+  #page-home .career p { font-size: 18px; }
+  #page-home .motion-toggle { font-size: 17px; }
+  #page-home .click-hint { font-size: 16px; }
   #page-yiwen .nav-link,
-  #page-yiwen .nav-cta { font-size: 0.9rem; }
-  #page-yiwen .hero-meta-label { font-size: 0.85rem; }
-  #page-yiwen .hero-meta-value { font-size: 1.1rem; }
-  #page-yiwen .timeline-year { font-size: 0.95rem; }
+  #page-yiwen .nav-cta { font-size: 17px; }
+  #page-yiwen .hero-label { font-size: 17px; }
+  #page-yiwen .hero-meta-label { font-size: 16px; }
+  #page-yiwen .hero-meta-value { font-size: 20px; }
+  #page-yiwen .section-label { font-size: 17px; }
+  #page-yiwen .about-block-title { font-size: 17px; }
+  #page-yiwen .about-block-content { font-size: 20px; }
+  #page-yiwen .timeline-year { font-size: 18px; }
+  #page-yiwen .timeline-detail h4 { font-size: 20px; }
+  #page-yiwen .timeline-detail p { font-size: 18px; }
+  #page-yiwen .work-item-tag,
+  #page-yiwen .work-item-client,
+  #page-yiwen .work-item-date { font-size: 17px; }
+  #page-yiwen .work-item-disciplines { font-size: 16px; }
+  #page-yiwen .contact-label { font-size: 17px; }
+  #page-yiwen .contact-footer { font-size: 16px; }
 }
 </style>
 </head>
